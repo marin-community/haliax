@@ -393,7 +393,6 @@ class _NamedJitWrapper(eqx.Module):
             cmanager = contextlib.nullcontext()
 
         with cmanager:
-            output_shape = _cached_filter_eval_shape(self._fn, *args, **kwargs)
             my_pjit_args = dict(**self._pjit_args)
 
             if in_axis_resources is not None:
@@ -404,12 +403,7 @@ class _NamedJitWrapper(eqx.Module):
                 )
                 my_pjit_args["in_shardings"] = in_resources
 
-            if out_axis_resources is not None:
-                # TODO: when AUTO is fixed (or eval_shape can give shardings), use it here
-                out_resources = infer_resource_partitions(
-                    output_shape, out_axis_resources, preserve_existing_shardings=False, use_auto_sharding=False
-                )
-                my_pjit_args["out_shardings"] = out_resources
+            my_pjit_args["out_axis_resources"] = out_axis_resources
 
             cached_pjitted_fun = _named_pjit_cache(self._fn, **my_pjit_args)
             if is_lower:
@@ -583,6 +577,8 @@ def _fsdp_impl(fn: F, parameter_mapping, compute_mapping):
 # Also recall that a "pytree" can split into leaves and a "treedef", which can then be reconstructed.
 @compile_cache
 def _named_pjit_cache(fun_names, **jitkwargs) -> WrappedCallable:
+    out_axis_resources = jitkwargs.pop("out_axis_resources", None)
+
     def fun_wrapped(dynamic_donated, dynamic_reserved, static):
         dynamic = eqx.combine(dynamic_donated, dynamic_reserved)
         dynamic_fun, dynamic_spec = dynamic
@@ -591,6 +587,8 @@ def _named_pjit_cache(fun_names, **jitkwargs) -> WrappedCallable:
         fun = hashable_combine(dynamic_fun, static_fun)
         args, kwargs = hashable_combine(dynamic_spec, static_spec)
         out = fun(*args, **kwargs)
+        if out_axis_resources is not None:
+            out = shard(out, out_axis_resources)
         out_dynamic, out_static = hashable_partition(out, is_array)
         return out_dynamic, Static(out_static)
 
@@ -599,10 +597,6 @@ def _named_pjit_cache(fun_names, **jitkwargs) -> WrappedCallable:
     fun_wrapped.__qualname__ = fun_qualname
 
     jitkwargs = dict(jitkwargs)
-    if "out_shardings" in jitkwargs:
-        out_shardings = jitkwargs["out_shardings"]
-        # None for the static
-        jitkwargs["out_shardings"] = (out_shardings, None)
 
     return jax.jit(
         fun_wrapped,
