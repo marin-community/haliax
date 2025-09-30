@@ -9,7 +9,7 @@ import jax.numpy as jnp
 
 import haliax as hax
 from haliax import Axis
-from haliax.partitioning import ResourceAxis, axis_mapping
+from haliax.partitioning import ResourceAxis, axis_mapping, named_jit
 from test_utils import skip_if_not_enough_devices
 from haliax.debug import visualize_shardings
 
@@ -37,15 +37,19 @@ def test_visualize_shardings_runs(capsys):
     assert "dim1" in out and "dim2" in out and "dim3" in out
 
 
+@skip_if_not_enough_devices(2, reason="JAX will claim it's unsharded if there's only one device")
 def test_visualize_shardings_inside_jit(capsys):
     mesh = jax.sharding.Mesh(np.array(jax.devices()).reshape(-1, 1), (ResourceAxis.DATA, ResourceAxis.MODEL))
 
+    @named_jit
     def fn(x):
+        x = hax.shard(x)
         visualize_shardings(x)
         return x
 
     with axis_mapping({"dim1": ResourceAxis.DATA}), mesh:
-        x = hax.ones(Dim1)
+        x = hax.ones({"dim1": 8 * len(jax.devices())})
+        x = hax.shard(x)
         x = hax.shard(x)
         fn(x)
 

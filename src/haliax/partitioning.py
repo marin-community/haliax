@@ -32,6 +32,7 @@ from .util import StringHolderEnum
 
 PhysicalAxisSpec: TypeAlias = str | Sequence[str]
 ResourceMapping: TypeAlias = Mapping[str, PhysicalAxisSpec]
+MeshLike = Union[Mesh, AbstractMesh]
 """Mapping from logical axis names to physical axis names"""
 
 F = typing.TypeVar("F", bound=typing.Callable)
@@ -91,6 +92,71 @@ def current_thread_local_mapping():
     return _mapping_holder.thread_data.resource_mapping
 
 
+def _resolve_mesh(mesh: Optional[MeshLike] = None) -> Optional[MeshLike]:
+    """Inside jit, prefer an abstract mesh, outside jit prefer a concrete mesh."""
+
+    from jax._src.mesh import get_concrete_mesh
+
+    if mesh is not None:
+        if is_in_jit() and isinstance(mesh, Mesh):
+            return mesh.abstract_mesh
+        return mesh
+
+    if is_in_jit():
+        abstract = get_abstract_mesh()
+        if not abstract or abstract.empty:
+            concrete = get_concrete_mesh()
+            if concrete is not None and not concrete.empty:
+                return concrete.abstract_mesh
+
+        from jax.interpreters.pxla import thread_resources
+
+        old_mesh = thread_resources.env.physical_mesh
+        if old_mesh is not None and not old_mesh.empty:
+            return old_mesh.abstract_mesh
+
+        return abstract
+    else:
+        mesh = get_concrete_mesh() or get_abstract_mesh()
+        if mesh is not None and not mesh.empty:
+            return mesh
+
+        from jax.interpreters.pxla import thread_resources
+
+        old_mesh = thread_resources.env.physical_mesh
+        if old_mesh is not None and not old_mesh.empty:
+            return old_mesh
+
+    return None
+
+
+def mesh_context(mesh: MeshLike) -> ContextManager[None]:
+    """Context manager that normalizes mesh handling across JAX versions."""
+
+    set_mesh_fn = getattr(jax, "set_mesh", None)
+    use_mesh_fn = getattr(jax.sharding, "use_mesh", None)
+
+    manager_factory: Optional[Callable[[MeshLike], ContextManager[None]]] = None
+    if set_mesh_fn is not None:
+        manager_factory = cast(Callable[[MeshLike], ContextManager[None]], set_mesh_fn)
+    elif use_mesh_fn is not None:
+        manager_factory = cast(Callable[[MeshLike], ContextManager[None]], use_mesh_fn)
+
+    if manager_factory is None:
+        msg = "Haliax requires a version of JAX that provides either `jax.set_mesh` or `jax.sharding.use_mesh`."
+        raise RuntimeError(msg)
+
+    context_manager = manager_factory(mesh)
+
+    return context_manager
+
+
+def set_mesh(mesh: MeshLike) -> ContextManager[None]:
+    """Compatibility wrapper around `mesh_context` matching the JAX 0.7 API."""
+
+    return mesh_context(mesh)
+
+
 def auto_sharded(x: T, mesh: Mesh | None = None) -> T:
     """
     Shard a PyTree using the global axis mapping. NamedArrays in the PyTree are sharded using the axis mapping
@@ -125,11 +191,15 @@ def shard(x: T, mapping: ResourceMapping | None = None, mesh: Mesh | None = None
 
     assert not isinstance(mesh, dict)
 
-    if mesh is None:
-        mesh = get_abstract_mesh()
+    resolved_mesh = _resolve_mesh(mesh)
 
-        if mesh is None or mesh.empty:
-            return x
+    if resolved_mesh is None:
+        if not is_in_jit():
+            warnings.warn("No mesh found. Not sharding.", RuntimeWarning)
+        return x
+
+    if isinstance(resolved_mesh, AbstractMesh) and resolved_mesh.empty:
+        return x
 
     if is_in_jit() and is_on_mac_metal():
         warnings.warn("Sharding constraints are not supported in jit on metal", RuntimeWarning)
@@ -144,16 +214,11 @@ def shard(x: T, mapping: ResourceMapping | None = None, mesh: Mesh | None = None
             # could use eqx.partition to avoid this, but eh
             return named
 
-        sharding = infer_resource_partitions(named, mapping, mesh=mesh, preserve_existing_shardings=False)
-        assert isinstance(sharding, NamedSharding)
-        in_sharding = getattr(named.array, "sharding", None)
+        pspec = pspec_for(named, mapping, preserve_existing_shardings=False)
+        assert isinstance(pspec, PartitionSpec)
+        sharding = NamedSharding(resolved_mesh, pspec)
         if is_in_jit():
             return with_sharding_constraint(named, sharding)
-        # as a special case, SingleDeviceShardings are routed through jit
-        elif isinstance(in_sharding, SingleDeviceSharding) and in_sharding._device in sharding.device_set:
-            # TODO(dlwh): this should be unnecessary in JAX soon. Check after 2024-08-01
-            sharded_array = jax.jit(lambda x: x, out_shardings=sharding)(named)
-            return sharded_array
         else:
             ret = jax.device_put(named, sharding)
             return ret
@@ -171,7 +236,6 @@ def pspec_for(
     tree: PyTree,
     resource_mapping: ResourceMapping | None = None,
     preserve_existing_shardings: bool = True,
-    use_auto_sharding: bool = True,
 ) -> PyTree:
     """Infer the :class:`PartitionSpec` for a module.
 
@@ -258,7 +322,6 @@ def infer_resource_partitions(
     tree: PyTree,
     resource_mapping: ResourceMapping | None = None,
     preserve_existing_shardings: bool = True,
-    use_auto_sharding: bool = True,
     mesh: Mesh | None = None,
 ) -> PyTree:
     """
@@ -273,13 +336,12 @@ def infer_resource_partitions(
         tree,
         resource_mapping=resource_mapping,
         preserve_existing_shardings=preserve_existing_shardings,
-        use_auto_sharding=use_auto_sharding,
     )
 
-    mesh = mesh or get_abstract_mesh()
-    if mesh is None:
+    resolved_mesh = _resolve_mesh(mesh)
+    if resolved_mesh is None:
         raise ValueError("No mesh found")
-    assert not isinstance(mesh, dict)
+    assert not isinstance(resolved_mesh, dict)
 
     def to_sharding(node: typing.Any, spec: typing.Any):
         if spec is None:
@@ -290,7 +352,7 @@ def infer_resource_partitions(
             else:
                 return None
         else:
-            return NamedSharding(mesh, spec)
+            return NamedSharding(resolved_mesh, spec)
 
     return htu.tree_map(to_sharding, tree, pspecs)
 
@@ -391,7 +453,7 @@ class _NamedJitWrapper(eqx.Module):
             if out_axis_resources is not None:
                 # TODO: when AUTO is fixed (or eval_shape can give shardings), use it here
                 out_resources = infer_resource_partitions(
-                    output_shape, out_axis_resources, preserve_existing_shardings=False, use_auto_sharding=False
+                    output_shape, out_axis_resources, preserve_existing_shardings=False
                 )
                 my_pjit_args["out_shardings"] = out_resources
 
@@ -626,7 +688,7 @@ def physical_axis_name(axis: AxisSelector, mapping: ResourceMapping | None = Non
 def physical_axis_size(axis: AxisSelector, mapping: ResourceMapping | None = None) -> int | None:
     """Get the physical axis size for a logical axis. This is the product of the size of all physical axes
     that this logical axis is mapped to."""
-    mesh = get_abstract_mesh()
+    mesh = _resolve_mesh()
 
     if mesh is None:
         raise ValueError("No mesh found")
@@ -643,12 +705,14 @@ def physical_axis_size(axis: AxisSelector, mapping: ResourceMapping | None = Non
 
 
 def sharding_for_axis(
-    axis: AxisSelection, mapping: ResourceMapping | None = None, mesh: Mesh | None = None
+    axis: AxisSelection, mapping: Optional[ResourceMapping] = None, mesh: Optional[MeshLike] = None
 ) -> NamedSharding:
     """Get the sharding for a single axis"""
-    resolved_mesh = mesh or get_abstract_mesh()
+    resolved_mesh = _resolve_mesh(mesh)
     if resolved_mesh is None:
         raise ValueError("No mesh found")
+
+    return NamedSharding(resolved_mesh, pspec_for_axis(axis, mapping))
 
     return NamedSharding(resolved_mesh, pspec_for_axis(axis, mapping))
 
@@ -669,15 +733,17 @@ def round_axis_for_partitioning(axis: Axis, mapping: ResourceMapping | None = No
         return Axis(axis.name, new_size)
 
 
-def _get_mesh() -> Mesh | AbstractMesh:
+def _get_mesh() -> Mesh | None:
     """Deprecated helper that simply proxies to :func:`get_abstract_mesh`."""
 
     warnings.warn(
-        "`_get_mesh` is deprecated; use `get_abstract_mesh` instead.",
+        "`_get_mesh` is deprecated; use `jax's get_abstract_mesh or get_concrete_mesh` instead",
         DeprecationWarning,
         stacklevel=2,
     )
-    return get_abstract_mesh()
+
+    mesh = _resolve_mesh()
+    return mesh
 
 
 def _is_jit_tracer(x) -> bool:
