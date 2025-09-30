@@ -242,6 +242,25 @@ def test_cumsum_etc():
     assert jnp.all(jnp.equal(hax.argsort(named1, axis=Width).array, jnp.argsort(named1.array, axis=1)))
     assert hax.argsort(named1, axis=Width).axes == (Height, Width, Depth)
 
+    assert jnp.all(
+        jnp.equal(
+            hax.argsort(named1, axis=Height, stable=True).array,
+            jnp.argsort(named1.array, axis=0, stable=True),
+        )
+    )
+    assert jnp.all(
+        jnp.equal(
+            hax.argsort(named1, axis=Width, stable=True).array,
+            jnp.argsort(named1.array, axis=1, stable=True),
+        )
+    )
+    assert jnp.all(
+        jnp.equal(
+            hax.argsort(named1, axis=None, stable=True),
+            jnp.argsort(named1.array, axis=None, stable=True),
+        )
+    )
+
 
 def test_searchsorted():
     A = hax.Axis("a", 5)
@@ -546,6 +565,33 @@ def test_index_with_tracer():
 
     idx = jnp.array(0)
     assert jnp.all(jnp.equal(f(idx).array, named1.array[0, :, :]))
+
+
+def test_index_with_numpy_integer_scalars():
+    (H,) = hax.make_axes(H=6)
+    arr = hax.arange(H)
+
+    np_int = np.int64(3)
+    result = arr[{H: np_int}]
+    assert isinstance(result, NamedArray)
+    assert result.axes == ()
+    assert jnp.all(jnp.equal(result.array, arr.array[int(np_int)]))
+
+    np_scalar_array = np.array(4, dtype=np.int32)
+    result = arr[{H: np_scalar_array}]
+    assert isinstance(result, NamedArray)
+    assert result.axes == ()
+    assert jnp.all(jnp.equal(result.array, arr.array[int(np_scalar_array)]))
+
+    class _FakeJaxScalar(np.ndarray):
+        def item(self, *args, **kwargs):  # pragma: no cover - exercised via test assertions
+            raise AssertionError("item should not be called on tracer-like indices")
+
+    fake_scalar = np.array(5, dtype=np.int32).view(_FakeJaxScalar)
+    result = arr[{H: fake_scalar}]
+    assert isinstance(result, NamedArray)
+    assert result.axes == ()
+    assert jnp.all(jnp.equal(result.array, arr[{H: 5}].array))
 
 
 def test_index_array_slices():

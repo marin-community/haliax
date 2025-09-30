@@ -45,6 +45,14 @@ def sum(a, axis=None):
 ## Harder Cases
 Some functions need bespoke handling. For example `jnp.unique` returns several arrays and may change shape unpredictably. There is no generic helper, so you will need to manually map between `NamedArray` axes and the outputs. Use the lower level utilities in `haliax.wrap` for broadcasting and axis lookup.
 
+## Axis-aware functions
+For JAX functions that accept an ``axis`` or ``axes`` argument, prefer a single
+``axis`` parameter of type :class:`haliax.AxisSelection` that also accepts an
+ordered mapping of axes to sizes. A mapping dispatches to the corresponding
+``n``‑dimensional JAX primitive (e.g. :func:`jax.numpy.fft.fftn`) and allows
+resizing the transformed axes by specifying integer lengths or ``Axis``
+instances.
+
 ## Testing
 Add tests to ensure that named and unnamed calls produce the same results and that axis names are preserved or removed correctly.
 

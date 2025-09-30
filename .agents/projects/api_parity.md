@@ -115,15 +115,15 @@ APIs that don't translate well to named tensors are intentionally omitted here. 
 - [ ] `permute_dims`
 - [ ] `piecewise`
 - [ ] `place`
-- [ ] `poly`
-- [ ] `polyadd`
-- [ ] `polyder`
-- [ ] `polydiv`
-- [ ] `polyfit`
-- [ ] `polyint`
-- [ ] `polymul`
-- [ ] `polysub`
-- [ ] `polyval`
+- [x] `poly`
+- [x] `polyadd`
+- [x] `polyder`
+- [x] `polydiv`
+- [x] `polyfit`
+- [x] `polyint`
+- [x] `polymul`
+- [x] `polysub`
+- [x] `polyval`
 - [ ] `pow`
 - [ ] `promote_types`
 - [ ] `put`
@@ -134,7 +134,7 @@ APIs that don't translate well to named tensors are intentionally omitted here. 
 - [ ] `resize`
 - [ ] `result_type`
 - [ ] `rollaxis`
-- [ ] `roots`
+- [x] `roots`
 - [ ] `rot90`
 - [ ] `select`
 - [ ] `setdiff1d`
@@ -148,7 +148,7 @@ APIs that don't translate well to named tensors are intentionally omitted here. 
 - [ ] `tri`
 - [ ] `tril_indices`
 - [ ] `tril_indices_from`
-- [ ] `trim_zeros`
+- [x] `trim_zeros`
 - [ ] `triu_indices`
 - [ ] `triu_indices_from`
 - [ ] `union1d`
@@ -156,29 +156,24 @@ APIs that don't translate well to named tensors are intentionally omitted here. 
 - [ ] `unravel_index`
 - [ ] `unstack`
 - [ ] `unwrap`
-- [ ] `vander`
+- [x] `vander`
 - [ ] `vsplit`
 - [ ] `vstack`
 
 ## fft
-- [ ] `fft`
-- [ ] `fft2`
-- [ ] `fftfreq`
-- [ ] `fftn`
-- [ ] `fftshift`
-- [ ] `hfft`
-- [ ] `ifft`
-- [ ] `ifft2`
-- [ ] `ifftn`
-- [ ] `ifftshift`
-- [ ] `ihfft`
-- [ ] `irfft`
-- [ ] `irfft2`
-- [ ] `irfftn`
-- [ ] `rfft`
-- [ ] `rfft2`
-- [ ] `rfftfreq`
-- [ ] `rfftn`
+Multi-dimensional transforms like `fftn` or `rfft2` are handled by passing a
+mapping of axes to :func:`haliax.fft` and friends.
+
+- [x] `fft`
+- [x] `fftfreq`
+- [x] `fftshift`
+- [x] `hfft`
+- [x] `ifft`
+- [x] `ifftshift`
+- [x] `ihfft`
+- [x] `irfft`
+- [x] `rfft`
+- [x] `rfftfreq`
 
 ## linalg
 - [ ] `cholesky`

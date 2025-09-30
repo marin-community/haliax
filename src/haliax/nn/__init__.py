@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
+import numbers
+
 import jax.nn as jnn
 import jax.numpy as jnp
 
@@ -64,16 +66,25 @@ def one_hot(x: NamedArray | int, class_axis: Axis, *, dtype=None) -> NamedArray:
         # Disabling this to prevent a crash in XLA on GPU
         # return hax.auto_sharded(hax.named(array, x.axes + (class_axis,)))
         return hax.named(array, x.axes + (class_axis,))
-    else:
-        assert isinstance(x, int)
+
+    x_array = jnp.asarray(x)
+    if x_array.ndim != 0:
+        raise TypeError("one_hot expects a scalar integer or NamedArray, " f"but got array with shape {x_array.shape}")
+
+    if isinstance(x, numbers.Integral):
         assert class_axis.size > x >= -class_axis.size
+    else:
+        if not (jnp.issubdtype(x_array.dtype, jnp.integer) or jnp.issubdtype(x_array.dtype, jnp.bool_)):
+            raise TypeError(
+                "one_hot expects an integer scalar or NamedArray, " f"but got value with dtype {x_array.dtype}"
+            )
 
-        one = 1
-        if dtype is not None:
-            one = dtype(one)
+    one = 1
+    if dtype is not None:
+        one = dtype(one)
 
-        array = jnp.zeros(class_axis.size, dtype=dtype).at[x].set(one)
-        return hax.auto_sharded(haliax.named(array, class_axis))
+    array = jnp.zeros(class_axis.size, dtype=dtype).at[x_array].set(one)
+    return hax.auto_sharded(haliax.named(array, class_axis))
 
 
 __all__ = [

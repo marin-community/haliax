@@ -96,6 +96,34 @@ from .ops import (
     bincount,
     where,
 )
+
+from .poly import (
+    poly,
+    polyadd,
+    polysub,
+    polymul,
+    polydiv,
+    polyint,
+    polyder,
+    polyval,
+    polyfit,
+    roots,
+    trim_zeros,
+    vander,
+)
+
+from .fft import (
+    fft,
+    fftfreq,
+    fftshift,
+    hfft,
+    ifft,
+    ifftshift,
+    ihfft,
+    irfft,
+    rfft,
+    rfftfreq,
+)
 from .partitioning import auto_sharded, axis_mapping, fsdp, named_jit, shard, shard_with_axis_mapping
 from .specialized_fns import top_k
 from .types import Scalar
@@ -805,14 +833,17 @@ def sort(a: NamedArray, axis: AxisSelector) -> NamedArray:
     return wrap_axiswise_call(jnp.sort, a, axis, single_axis_only=True)
 
 
-def argsort(a: NamedArray, axis: AxisSelector) -> NamedArray:
+def argsort(a: NamedArray, axis: AxisSelector | None, *, stable: bool = False) -> NamedArray:
     """
     Named version of [jax.numpy.argsort](https://jax.readthedocs.io/en/latest/_autosummary/jax.numpy.argsort.html).
 
     If `axis` is None, the returned array will be a 1D array of indices that would sort the flattened array,
     identical to `jax.numpy.argsort(a.array)`.
+
+    Args:
+        stable: If ``True``, ensures that the indices of equal elements preserve their relative order.
     """
-    return wrap_axiswise_call(jnp.argsort, a, axis, single_axis_only=True)
+    return wrap_axiswise_call(jnp.argsort, a, axis, single_axis_only=True, stable=stable)
 
 
 # elemwise binary ops
@@ -1224,6 +1255,28 @@ __all__ = [
     "clip",
     "tril",
     "triu",
+    "poly",
+    "polyadd",
+    "polysub",
+    "polymul",
+    "polydiv",
+    "polyint",
+    "polyder",
+    "polyval",
+    "polyfit",
+    "roots",
+    "trim_zeros",
+    "vander",
+    "fft",
+    "ifft",
+    "hfft",
+    "ihfft",
+    "rfft",
+    "irfft",
+    "fftfreq",
+    "rfftfreq",
+    "fftshift",
+    "ifftshift",
     "add",
     "arctan2",
     "bitwise_and",
