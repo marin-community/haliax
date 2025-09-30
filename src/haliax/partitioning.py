@@ -16,15 +16,7 @@ import equinox as eqx
 import jax
 from equinox import is_array, module_update_wrapper
 from jax.lax import with_sharding_constraint
-from jax.sharding import (
-    AbstractMesh, 
-    NamedSharding,
-    Mesh,
-    PartitionSpec,
-    SingleDeviceSharding,
-    get_abstract_mesh
-)
-
+from jax.sharding import AbstractMesh, NamedSharding, Mesh, PartitionSpec, SingleDeviceSharding, get_abstract_mesh
 
 
 from jaxtyping import PyTree
