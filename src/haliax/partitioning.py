@@ -17,24 +17,14 @@ import jax
 from equinox import is_array, module_update_wrapper
 from jax.lax import with_sharding_constraint
 from jax.sharding import (
-    Mesh,
+    AbstractMesh, 
     NamedSharding,
+    Mesh,
     PartitionSpec,
     SingleDeviceSharding,
+    get_abstract_mesh
 )
 
-try:  # jax>=0.4.26
-    from jax.sharding import AbstractMesh, get_abstract_mesh
-except Exception:  # pragma: no cover - older JAX versions
-    AbstractMesh = Mesh  # type: ignore[misc,assignment]
-
-    def get_abstract_mesh():  # type: ignore[dead-code]
-        try:
-            from jax.interpreters.pxla import thread_resources
-        except Exception:
-            from jax.experimental.maps import thread_resources
-
-        return thread_resources.env.physical_mesh
 
 
 from jaxtyping import PyTree
@@ -144,9 +134,9 @@ def shard(x: T, mapping: ResourceMapping | None = None, mesh: Mesh | None = None
     assert not isinstance(mesh, dict)
 
     if mesh is None:
-        mesh = _get_mesh()
+        mesh = get_abstract_mesh()
 
-        if mesh.empty:
+        if mesh is None or mesh.empty:
             return x
 
     if is_in_jit() and is_on_mac_metal():
@@ -294,7 +284,9 @@ def infer_resource_partitions(
         use_auto_sharding=use_auto_sharding,
     )
 
-    mesh = mesh or _get_mesh()
+    mesh = mesh or get_abstract_mesh()
+    if mesh is None:
+        raise ValueError("No mesh found")
     assert not isinstance(mesh, dict)
 
     def to_sharding(node: typing.Any, spec: typing.Any):
@@ -642,7 +634,7 @@ def physical_axis_name(axis: AxisSelector, mapping: ResourceMapping | None = Non
 def physical_axis_size(axis: AxisSelector, mapping: ResourceMapping | None = None) -> int | None:
     """Get the physical axis size for a logical axis. This is the product of the size of all physical axes
     that this logical axis is mapped to."""
-    mesh = _get_mesh()
+    mesh = get_abstract_mesh()
 
     if mesh is None:
         raise ValueError("No mesh found")
@@ -662,7 +654,11 @@ def sharding_for_axis(
     axis: AxisSelection, mapping: ResourceMapping | None = None, mesh: Mesh | None = None
 ) -> NamedSharding:
     """Get the sharding for a single axis"""
-    return NamedSharding(mesh or _get_mesh(), pspec_for_axis(axis, mapping))
+    resolved_mesh = mesh or get_abstract_mesh()
+    if resolved_mesh is None:
+        raise ValueError("No mesh found")
+
+    return NamedSharding(resolved_mesh, pspec_for_axis(axis, mapping))
 
 
 def pspec_for_axis(axis: AxisSelection, mapping: ResourceMapping | None = None) -> PartitionSpec:
@@ -682,27 +678,14 @@ def round_axis_for_partitioning(axis: Axis, mapping: ResourceMapping | None = No
 
 
 def _get_mesh() -> Mesh | AbstractMesh:
-    """Return the current mesh.
+    """Deprecated helper that simply proxies to :func:`get_abstract_mesh`."""
 
-    On newer versions of JAX this prefers ``get_abstract_mesh`` which does not
-    capture concrete devices.  If no abstract mesh is currently active we fall
-    back to the concrete mesh used by ``Mesh``'s context manager so existing
-    code continues to work.
-    """
-
-    try:  # jax>=0.4.26
-        mesh = get_abstract_mesh()
-        if not getattr(mesh, "empty", False):
-            return mesh
-    except Exception:  # pragma: no cover - older JAX versions
-        pass
-
-    try:
-        from jax.interpreters.pxla import thread_resources
-    except Exception:  # pragma: no cover - jax<0.4
-        from jax.experimental.maps import thread_resources
-
-    return thread_resources.env.physical_mesh
+    warnings.warn(
+        "`_get_mesh` is deprecated; use `get_abstract_mesh` instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return get_abstract_mesh()
 
 
 def _is_jit_tracer(x) -> bool:
