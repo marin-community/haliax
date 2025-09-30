@@ -74,5 +74,3 @@ def test_moe_linear_gmm_matches_ragged_dot_general():
 
     assert actual.axes == expected.axes
     assert jnp.allclose(actual.array, expected.array, rtol=1e-5, atol=1e-5)
-
-

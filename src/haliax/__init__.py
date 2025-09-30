@@ -1349,4 +1349,5 @@ __all__ = [
     "NamedArrayAxes",
     "NamedArrayAxesSpec",
     "Named",
+    "set_mesh"
 ]

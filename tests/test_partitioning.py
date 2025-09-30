@@ -15,7 +15,6 @@ from haliax import Axis, NamedArray
 from haliax.partitioning import (
     ResourceAxis,
     axis_mapping,
-    infer_resource_partitions,
     named_jit,
     set_mesh,
     pspec_for,

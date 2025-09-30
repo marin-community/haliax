@@ -10,7 +10,7 @@ import threading
 import typing
 import warnings
 from math import prod
-from typing import Callable, ContextManager, Iterator, Mapping, Optional, ParamSpec, Sequence, TypeVar, Union, cast
+from typing import Callable, ContextManager, Mapping, Optional, ParamSpec, Sequence, TypeVar, Union, cast
 
 import equinox as eqx
 import jax
@@ -110,6 +110,7 @@ def _resolve_mesh(mesh: Optional[MeshLike] = None) -> Optional[MeshLike]:
                 return concrete.abstract_mesh
 
         from jax.interpreters.pxla import thread_resources
+
         old_mesh = thread_resources.env.physical_mesh
         if old_mesh is not None and not old_mesh.empty:
             return old_mesh.abstract_mesh
@@ -741,8 +742,6 @@ def _get_mesh() -> Mesh | None:
 
     mesh = _resolve_mesh()
     return mesh
-
-
 
 
 def _is_jit_tracer(x) -> bool:
