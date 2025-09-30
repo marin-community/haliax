@@ -10,7 +10,7 @@ import threading
 import typing
 import warnings
 from math import prod
-from typing import Callable, ContextManager, Mapping, ParamSpec, Sequence, TypeAlias, TypeVar
+from typing import Callable, ContextManager, Mapping, ParamSpec, Sequence, TypeAlias, TypeVar, cast
 
 import equinox as eqx
 import jax
@@ -32,7 +32,7 @@ from .util import StringHolderEnum
 
 PhysicalAxisSpec: TypeAlias = str | Sequence[str]
 ResourceMapping: TypeAlias = Mapping[str, PhysicalAxisSpec]
-MeshLike = Union[Mesh, AbstractMesh]
+MeshLike: TypeAlias = Mesh | AbstractMesh
 """Mapping from logical axis names to physical axis names"""
 
 F = typing.TypeVar("F", bound=typing.Callable)
@@ -92,7 +92,7 @@ def current_thread_local_mapping():
     return _mapping_holder.thread_data.resource_mapping
 
 
-def _resolve_mesh(mesh: Optional[MeshLike] = None) -> Optional[MeshLike]:
+def _resolve_mesh(mesh: MeshLike | None = None) -> MeshLike | None:
     """Inside jit, prefer an abstract mesh, outside jit prefer a concrete mesh."""
 
     from jax._src.mesh import get_concrete_mesh
@@ -136,7 +136,7 @@ def mesh_context(mesh: MeshLike) -> ContextManager[None]:
     set_mesh_fn = getattr(jax, "set_mesh", None)
     use_mesh_fn = getattr(jax.sharding, "use_mesh", None)
 
-    manager_factory: Optional[Callable[[MeshLike], ContextManager[None]]] = None
+    manager_factory: Callable[[MeshLike], ContextManager[None]] | None = None
     if set_mesh_fn is not None:
         manager_factory = cast(Callable[[MeshLike], ContextManager[None]], set_mesh_fn)
     elif use_mesh_fn is not None:
@@ -705,7 +705,7 @@ def physical_axis_size(axis: AxisSelector, mapping: ResourceMapping | None = Non
 
 
 def sharding_for_axis(
-    axis: AxisSelection, mapping: Optional[ResourceMapping] = None, mesh: Optional[MeshLike] = None
+    axis: AxisSelection, mapping: ResourceMapping | None = None, mesh: MeshLike | None = None
 ) -> NamedSharding:
     """Get the sharding for a single axis"""
     resolved_mesh = _resolve_mesh(mesh)
