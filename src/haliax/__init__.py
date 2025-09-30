@@ -8,39 +8,8 @@ from typing import Optional, Sequence
 
 import jax
 import jax.numpy as jnp
+from jax.typing import DTypeLike
 
-try:
-    from jax.typing import DTypeLike
-except ImportError:
-    from jax._src.typing import DTypeLike
-
-
-_MIN_JAX_VERSION = (0, 6, 2)
-
-
-def _version_tuple(version: str) -> tuple[int, int, int]:
-    parts: list[int] = []
-    for part in version.split("."):
-        digits = []
-        for char in part:
-            if char.isdigit():
-                digits.append(char)
-            else:
-                break
-        if not digits:
-            break
-        parts.append(int("".join(digits)))
-
-    while len(parts) < 3:
-        parts.append(0)
-
-    return tuple(parts[:3])
-
-
-if _version_tuple(jax.__version__) < _MIN_JAX_VERSION:
-    min_version_str = ".".join(str(x) for x in _MIN_JAX_VERSION)
-    msg = f"Haliax requires JAX>={min_version_str}; found {jax.__version__}."
-    raise ImportError(msg)
 
 import haliax.debug as debug
 import haliax.nn as nn
