@@ -17,6 +17,7 @@ from haliax.partitioning import (
     axis_mapping,
     infer_resource_partitions,
     named_jit,
+    set_mesh,
     pspec_for,
 )
 from test_utils import skip_if_not_enough_devices
@@ -96,7 +97,7 @@ class MyModuleInit(eqx.Module):
 def test_pjit_class_init():
     with axis_mapping(resource_map):
         devices = jax.devices()
-        with Mesh(np.array(devices).reshape(-1, 2), (ResourceAxis.DATA, ResourceAxis.MODEL)):
+        with Mesh(np.array(devices).reshape(-1, 2), (ResourceAxis.DATA, ResourceAxis.MODEL)) as mesh, set_mesh(mesh):
             mod = named_jit(MyModuleInit)()
 
         assert mod.named.array.shape == (Dim2.size, Dim3.size)
@@ -116,7 +117,7 @@ def test_pjit_class_nested_init():
                 self.inner = MyModuleInit()
 
         devices = jax.devices()
-        with Mesh(np.array(devices).reshape(-1, 2), (ResourceAxis.DATA, ResourceAxis.MODEL)):
+        with Mesh(np.array(devices).reshape(-1, 2), (ResourceAxis.DATA, ResourceAxis.MODEL)) as mesh, set_mesh(mesh):
             mod2 = named_jit(Mod2)()
 
         mod = mod2.inner
@@ -137,7 +138,8 @@ def test_pjit_class_init_with_args():
                 self.array2 = hax.zeros(Dim3)
 
         devices = jax.devices()
-        with Mesh(np.array(devices).reshape(-1, 1), (ResourceAxis.DATA, ResourceAxis.MODEL)):
+        mesh = jax.make_mesh((len(devices), 1), (ResourceAxis.DATA, ResourceAxis.MODEL))
+        with set_mesh(mesh):
             mod = named_jit(ModWithArgs)(hax.shard(hax.ones((Dim1, Dim2))))
         assert isinstance(mod, ModWithArgs)
         assert mod.array.array.shape == (Dim1.size, Dim2.size)
@@ -146,7 +148,7 @@ def test_pjit_class_init_with_args():
 
 def test_infer_resource_partition_gda_bug():
     devices = jax.devices()
-    with Mesh(np.array(devices).reshape(-1, 1), (ResourceAxis.DATA, ResourceAxis.MODEL)):
+    with Mesh(np.array(devices).reshape(-1, 1), (ResourceAxis.DATA, ResourceAxis.MODEL)) as mesh, set_mesh(mesh):
 
         def foo():
             return hax.zeros((Dim1, Dim2, Dim3))
@@ -167,7 +169,7 @@ def test_infer_resource_partition_gda_bug():
 @skip_if_not_enough_devices(4)
 def test_shard_with_axis_mapping_outside_pjit():
     devices = jax.devices()
-    with Mesh(np.array(devices).reshape(-1, 2), (ResourceAxis.DATA, ResourceAxis.MODEL)) as mesh:
+    with Mesh(np.array(devices).reshape(-1, 2), (ResourceAxis.DATA, ResourceAxis.MODEL)) as mesh, set_mesh(mesh):
         x = hax.ones((Dim1, Dim2))
         y = hax.ones((Dim2, Dim3))
 
@@ -180,7 +182,7 @@ def test_shard_with_axis_mapping_outside_pjit():
 
 def test_named_jit_works_without_axis_resources():
     devices = jax.devices()
-    with Mesh(np.array(devices).reshape(-1, 1), (ResourceAxis.DATA, ResourceAxis.MODEL)) as mesh:
+    with Mesh(np.array(devices).reshape(-1, 1), (ResourceAxis.DATA, ResourceAxis.MODEL)) as mesh, set_mesh(mesh):
 
         def foo(x):
             return x
@@ -202,7 +204,7 @@ def test_named_jit_works_without_axis_resources():
 @skip_if_not_enough_devices(4)
 def test_shard_with_axis_mapping_inside_jit():
     devices = jax.devices()
-    with Mesh(np.array(devices).reshape(-1, 2), (ResourceAxis.DATA, ResourceAxis.MODEL)) as mesh:
+    with Mesh(np.array(devices).reshape(-1, 2), (ResourceAxis.DATA, ResourceAxis.MODEL)) as mesh, set_mesh(mesh):
         x = hax.ones((Dim1, Dim2))
         y = hax.ones((Dim2, Dim3))
 
@@ -240,7 +242,7 @@ def test_shard_scalar_in_module():
                 )
 
         devices = jax.devices()
-        with Mesh(np.array(devices).reshape(-1, 1), (ResourceAxis.DATA, ResourceAxis.MODEL)):
+        with Mesh(np.array(devices).reshape(-1, 1), (ResourceAxis.DATA, ResourceAxis.MODEL)) as mesh, set_mesh(mesh):
             mod = named_jit(MyModule)()
             assert mod.scalar.sharding.is_fully_replicated
 
@@ -255,7 +257,7 @@ def test_shard_plain_array_in_module():
                 self.array = jnp.zeros((8, 8))
 
         devices = jax.devices()
-        with Mesh(np.array(devices).reshape(-1, 1), (ResourceAxis.DATA, ResourceAxis.MODEL)):
+        with Mesh(np.array(devices).reshape(-1, 1), (ResourceAxis.DATA, ResourceAxis.MODEL)) as mesh, set_mesh(mesh):
             mod = named_jit(MyModule)()
             assert mod.array.sharding.is_fully_replicated
 
@@ -268,7 +270,7 @@ def test_named_jit_with_donation():
             array2: jnp.ndarray
 
         devices = jax.devices()
-        with Mesh(np.array(devices).reshape(-1, 1), (ResourceAxis.DATA, ResourceAxis.MODEL)):
+        with Mesh(np.array(devices).reshape(-1, 1), (ResourceAxis.DATA, ResourceAxis.MODEL)) as mesh, set_mesh(mesh):
             mod = named_jit(MyModule, donate_args=(True, False))(jnp.zeros((8, 8)), jnp.zeros((8, 16)))
             assert mod.array.sharding.is_fully_replicated
 
@@ -288,7 +290,7 @@ def test_named_jit_with_donation_nested_pytrees():
             return MyModule2(MyModule(a1, a2), MyModule(a1, a2))
 
         devices = jax.devices()
-        with Mesh(np.array(devices).reshape(-1, 1), (ResourceAxis.DATA, ResourceAxis.MODEL)):
+        with Mesh(np.array(devices).reshape(-1, 1), (ResourceAxis.DATA, ResourceAxis.MODEL)) as mesh, set_mesh(mesh):
             mod = named_jit(init, donate_args=(True, False))(jnp.zeros((8, 8)), jnp.zeros((8, 16)))
             assert mod.mod.array.sharding.is_fully_replicated
 
@@ -308,7 +310,7 @@ def test_jit_lower_doesnt_blow_up():
             return MyModule2(MyModule(a1, a2), MyModule(a1, a2))
 
         devices = jax.devices()
-        with Mesh(np.array(devices).reshape(-1, 1), (ResourceAxis.DATA, ResourceAxis.MODEL)):
+        with Mesh(np.array(devices).reshape(-1, 1), (ResourceAxis.DATA, ResourceAxis.MODEL)) as mesh, set_mesh(mesh):
             jit_init = named_jit(init, donate_args=(True, False))
             lowered = jit_init.lower(jnp.zeros((8, 8)), jnp.zeros((8, 16)))
             assert lowered
@@ -337,7 +339,7 @@ def test_cross_device_sharding():
 
 def test_named_jit_no_in_axis_resources():
     mesh = Mesh(np.array(jax.devices()).reshape(-1, 1), (ResourceAxis.DATA, ResourceAxis.MODEL))
-    with axis_mapping(resource_map), jax.sharding.use_mesh(mesh):
+    with axis_mapping(resource_map), set_mesh(mesh):
 
         class MyModule(eqx.Module):
             array: NamedArray
