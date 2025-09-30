@@ -144,18 +144,12 @@ def shard(x: T, mapping: Optional[ResourceMapping] = None, mesh: Optional[Mesh] 
             # could use eqx.partition to avoid this, but eh
             return named
 
-        sharding = infer_resource_partitions(named, mapping, mesh=mesh, preserve_existing_shardings=False)
-        assert isinstance(sharding, NamedSharding)
-        in_sharding = getattr(named.array, "sharding", None)
+        pspec = pspec_for(named, mapping, preserve_existing_shardings=False)
+        assert isinstance(pspec, NamedSharding)
         if is_in_jit():
-            return with_sharding_constraint(named, sharding)
-        # as a special case, SingleDeviceShardings are routed through jit
-        elif isinstance(in_sharding, SingleDeviceSharding) and in_sharding._device in sharding.device_set:
-            # TODO(dlwh): this should be unnecessary in JAX soon. Check after 2024-08-01
-            sharded_array = jax.jit(lambda x: x, out_shardings=sharding)(named)
-            return sharded_array
+            return with_sharding_constraint(named, pspec)
         else:
-            ret = jax.device_put(named, sharding)
+            ret = jax.device_put(named, pspec)
             return ret
 
     return htu.tree_map(_do_device_put, x)
@@ -171,7 +165,6 @@ def pspec_for(
     tree: PyTree,
     resource_mapping: Optional[ResourceMapping] = None,
     preserve_existing_shardings: bool = True,
-    use_auto_sharding: bool = True,
 ) -> PyTree:
     """Infer the :class:`PartitionSpec` for a module.
 
@@ -258,7 +251,6 @@ def infer_resource_partitions(
     tree: PyTree,
     resource_mapping: Optional[ResourceMapping] = None,
     preserve_existing_shardings: bool = True,
-    use_auto_sharding: bool = True,
     mesh: Optional[Mesh] = None,
 ) -> PyTree:
     """
@@ -273,7 +265,6 @@ def infer_resource_partitions(
         tree,
         resource_mapping=resource_mapping,
         preserve_existing_shardings=preserve_existing_shardings,
-        use_auto_sharding=use_auto_sharding,
     )
 
     mesh = mesh or get_abstract_mesh()
@@ -391,7 +382,7 @@ class _NamedJitWrapper(eqx.Module):
             if out_axis_resources is not None:
                 # TODO: when AUTO is fixed (or eval_shape can give shardings), use it here
                 out_resources = infer_resource_partitions(
-                    output_shape, out_axis_resources, preserve_existing_shardings=False, use_auto_sharding=False
+                    output_shape, out_axis_resources, preserve_existing_shardings=False
                 )
                 my_pjit_args["out_shardings"] = out_resources
 
