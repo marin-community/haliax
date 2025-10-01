@@ -199,26 +199,32 @@ class NamedArrayMeta(type):
 @dataclass(frozen=True)
 class NamedArray(metaclass=NamedArrayMeta):
     array: jnp.ndarray
-    axes: tuple[Axis, ...]
+    axis_names: tuple[str, ...]
 
-    def __init__(self, array: jnp.ndarray, axes: AxisSpec):
+    def __init__(self, array: jnp.ndarray, axes: AxisSelection):
         object.__setattr__(self, "array", array)
         if isinstance(axes, Mapping):
-            axes = tuple(Axis(name, size) for name, size in axes.items())
-        object.__setattr__(self, "axes", ensure_tuple(axes))
+            axes = tuple(Axis(name, size) for name, size in axes.items())  # type: ignore[arg-type]
+        axes = ensure_tuple(axes)
 
-        # ensure axes are all Axis objects
-        # TODO: anonymous positional axes?
-        for axis in self.axes:
-            if not isinstance(axis, Axis):
-                raise TypeError(f"Expected Axis, got {type(axis)}")
+        axis_names: list[str] = []
+        for axis in axes:
+            if isinstance(axis, Axis):
+                axis_names.append(axis.name)
+            elif isinstance(axis, str):
+                axis_names.append(axis)
+            else:
+                raise TypeError(f"Expected Axis or str, got {type(axis)}")
 
-        # ensure unique axes for now
-        if len(set(a.name for a in self.axes)) != len(self.axes):
-            raise ValueError(f"Axes must be unique, but {self.axes} are not")
+        if len(set(axis_names)) != len(axis_names):
+            raise ValueError(f"Axes must be unique, but {axis_names} are not")
 
-        if are_shape_checks_enabled():
-            self._ensure_shape_matches_axes()
+        object.__setattr__(self, "axis_names", tuple(axis_names))
+
+    @property
+    def axes(self) -> tuple[Axis, ...]:
+        shape = jnp.shape(self.array)
+        return tuple(Axis(name, int(sz)) for name, sz in zip(self.axis_names, shape))
 
     def _ensure_shape_matches_axes(self):
         """This is typically called automatically, but sometimes we need to call it manually if
@@ -259,7 +265,7 @@ class NamedArray(metaclass=NamedArrayMeta):
 
     @ft.cached_property
     def shape(self) -> Dict[str, int]:
-        return {axis.name: axis.size for axis in self.axes}
+        return {name: size for name, size in zip(self.axis_names, jnp.shape(self.array))}
 
     dtype = property(lambda self: self.array.dtype)
     """The dtype of the underlying array"""
@@ -271,7 +277,7 @@ class NamedArray(metaclass=NamedArrayMeta):
     """The number of bytes in the underlying array"""
 
     def tree_flatten(self) -> Any:
-        return ((self.array,), self.axes)
+        return ((self.array,), self.axis_names)
 
     @classmethod
     def tree_unflatten(cls, aux, tree: Any) -> Any:
@@ -1609,8 +1615,9 @@ def flatten(array: NamedArray, new_axis_name: AxisSelector) -> NamedArray:
 def named(a, axis: AxisSelection) -> NamedArray:
     """Creates a NamedArray from a numpy array and a list of axes."""
     a = jnp.asarray(a)
-    axes = check_shape(a.shape, axis)
-    return NamedArray(a, axes)
+    check_shape(a.shape, axis)
+    axis_names = tuple(axis_name(ax) for ax in axis_spec_to_tuple(axis))
+    return NamedArray(a, axis_names)
 
 
 # Broadcasting Support
