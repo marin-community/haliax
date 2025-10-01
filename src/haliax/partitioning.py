@@ -649,7 +649,7 @@ def _get_mesh() -> Mesh | AbstractMesh:
 
 
 def shard_map(
-    f: Callable,
+    f: Optional[Callable] = None,
     *,
     in_specs=None,
     out_specs=None,
@@ -659,6 +659,13 @@ def shard_map(
     **kwargs,
 ):
     """A NamedArray-friendly wrapper around :func:`jax.experimental.shard_map.shard_map`.
+
+    This function can be used either as ``haliax.shard_map(fn, ...)`` or as a
+    decorator::
+
+        @haliax.shard_map(mesh=my_mesh)
+        def fn(x):
+            ...
 
     Args:
         f: The function to apply with ``shard_map``.
@@ -682,6 +689,17 @@ def shard_map(
             A wrapped function that accepts and returns ``NamedArray`` objects
             according to the provided specifications.
     """
+
+    if f is None:
+        return lambda fn: shard_map(
+            fn,
+            in_specs=in_specs,
+            out_specs=out_specs,
+            mesh=mesh,
+            axis_mapping=axis_mapping,
+            check_rep=check_rep,
+            **kwargs,
+        )
 
     mesh = mesh or _get_mesh()
 
@@ -800,7 +818,7 @@ def shard_map(
         ]
         return jtu.tree_unflatten(out_tree, wrapped_out)
 
-    return wrapper
+    return functools.update_wrapper(wrapper, f)
 
 
 def _is_jit_tracer(x) -> bool:

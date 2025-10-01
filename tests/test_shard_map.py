@@ -97,3 +97,37 @@ def test_shard_map_multiple_args():
 
     assert out.axes == (Dim,)
     assert jnp.allclose(out.array, x.array + y.array)
+
+
+@skip_if_not_enough_devices(2)
+def test_shard_map_decorator_usage():
+    mesh = Mesh(np.array(jax.devices()), (ResourceAxis.DATA,))
+
+    @hax.shard_map(mesh=mesh, check_rep=False)
+    def fn(x):
+        return x + 5
+
+    x = hax.ones(Dim)
+    with axis_mapping({"dim": ResourceAxis.DATA}), mesh:
+        out = fn(x)
+
+    assert out.axes == (Dim,)
+    assert jnp.allclose(out.array, x.array + 5)
+
+
+@skip_if_not_enough_devices(2)
+def test_shard_map_decorator_no_kwargs():
+    mesh = Mesh(np.array(jax.devices()), (ResourceAxis.DATA,))
+
+    with mesh:
+
+        @hax.shard_map
+        def fn(x):
+            return x - 1
+
+    x = hax.ones(Dim)
+    with axis_mapping({"dim": ResourceAxis.DATA}), mesh:
+        out = fn(x)
+
+    assert out.axes == (Dim,)
+    assert jnp.allclose(out.array, x.array - 1)
