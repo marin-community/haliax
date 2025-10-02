@@ -1,3 +1,8 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
 from typing import Callable
 import typing
 
@@ -154,6 +159,29 @@ def test_where(use_jit):
     unnamed_7 = named7.array
     unnamed_8, unnamed_9, unnamed_10 = jnp.where(unnamed_7 > 0.5, size=Volume.size, fill_value=-1)
     assert jnp.all(unnamed_8 == named8.array)
+
+
+@pytest.mark.parametrize("use_jit", [False, True])
+def test_nonzero(use_jit):
+    Height = Axis("Height", 3)
+    Width = Axis("Width", 4)
+
+    data = jnp.array([[0, 1, 0, 2], [3, 0, 4, 0], [0, 0, 5, 6]])
+    named = hax.named(data, (Height, Width))
+
+    Nonzero = Axis("Nonzero", Height.size * Width.size)
+
+    hax_nonzero: Callable = hax.nonzero
+    if use_jit:
+        hax_nonzero = hax.named_jit(hax_nonzero)
+
+    i, j = hax_nonzero(named, size=Nonzero, fill_value=-1)
+    ui, uj = jnp.nonzero(data, size=Nonzero.size, fill_value=-1)
+
+    assert i.axes == (Nonzero,)
+    assert j.axes == (Nonzero,)
+    assert jnp.all(i.array == ui)
+    assert jnp.all(j.array == uj)
 
 
 def test_clip():
@@ -407,3 +435,70 @@ def test_unique_shortcuts():
     assert jnp.all(ia.array == ia_exp.array)
     assert jnp.all(ina.array == ina_exp.array)
     assert jnp.all(ca.array == ca_exp.array)
+
+
+def test_bincount():
+    X = Axis("X", 6)
+    x = hax.named([0, 1, 1, 2, 3, 1], (X,))
+    B = Axis("B", 5)
+
+    out = hax.bincount(x, B)
+    expected = jnp.bincount(x.array, length=B.size)
+    assert out.axes == (B,)
+    assert jnp.all(out.array == expected)
+
+    w = hax.arange((X,), dtype=jnp.float32)
+    out_w = hax.bincount(x, B, weights=w)
+    expected_w = jnp.bincount(x.array, weights=w.array, length=B.size)
+    assert jnp.allclose(out_w.array, expected_w)
+
+
+def test_allclose_array_equal_equiv():
+    A = Axis("A", 2)
+    B = Axis("B", 3)
+    x = hax.random.uniform(PRNGKey(0), (A, B))
+    y = x + 1e-6
+
+    assert hax.allclose(x, y)
+    assert not hax.allclose(x, x + 1.0)
+
+    x1 = hax.ones((A, B))
+    y_reordered = x1.rearrange((B, A))
+    assert hax.array_equal(x1, y_reordered)
+
+    scalar = hax.ones(())
+    assert hax.array_equiv(x1, scalar)
+    assert not hax.array_equal(x1, scalar)
+
+    y_vec = hax.ones((B,))
+    assert hax.array_equiv(x1, y_vec)
+    assert not hax.array_equal(x1, y_vec)
+
+    C = Axis("C", 4)
+    z = hax.ones((C,))
+    assert not hax.array_equiv(x1, z)
+
+
+def test_roll_scalar_named_shift():
+    H = Axis("H", 4)
+    W = Axis("W", 3)
+
+    arr = hax.arange((H, W))
+    shift = hax.named(jnp.array(1), ())
+
+    rolled = hax.roll(arr, shift, H)
+    expected = jnp.roll(arr.array, shift.array, axis=0)
+
+    assert rolled.axes == arr.axes
+    assert jnp.all(rolled.array == expected)
+
+
+def test_roll_bad_named_shift():
+    H = Axis("H", 4)
+    W = Axis("W", 3)
+
+    arr = hax.arange((H, W))
+    shift = hax.arange((Axis("dummy", 2),))
+
+    with pytest.raises(TypeError):
+        hax.roll(arr, shift, H)

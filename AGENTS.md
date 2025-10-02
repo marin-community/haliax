@@ -41,7 +41,8 @@ repository. Follow these notes when implementing new features or fixing bugs.
   `[Object 1][full.path.object1]`)
 * **Documentation**: When adding new features, ensure that the documentation is updated accordingly.
   This includes updating the Mkdocs files and any relevant docstrings. If you add a new module or
-  significant functionality, consider adding a dedicated section in the documentation.
+  significant functionality, consider adding a dedicated section in the documentation. When you
+  wrap a new JAX function, add a reference to it in `docs/api.md` so users can discover it.
 
 ## Testing
 

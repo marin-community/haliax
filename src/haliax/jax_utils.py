@@ -1,3 +1,8 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
 import functools as ft
 import typing
 import warnings
@@ -15,7 +20,6 @@ from jaxtyping import PRNGKeyArray
 
 import haliax
 from haliax.types import PrecisionLike
-
 
 try:
     # jax v0.5.1 or newer
@@ -106,13 +110,11 @@ def _UNSPECIFIED():
 
 
 @typing.overload
-def named_call(f: F, name: Optional[str] = None) -> F:
-    ...
+def named_call(f: F, name: Optional[str] = None) -> F: ...
 
 
 @typing.overload
-def named_call(*, name: Optional[str] = None) -> Callable[[F], F]:
-    ...
+def named_call(*, name: Optional[str] = None) -> Callable[[F], F]: ...
 
 
 def named_call(f=_UNSPECIFIED, name: Optional[str] = None):
@@ -151,6 +153,21 @@ def is_scalarish(x):
         return x.ndim == 0
     else:
         return jnp.isscalar(x) or (getattr(x, "shape", None) == ())
+
+
+def ensure_scalar(x, *, name: str = "value"):
+    """Return ``x`` if it is not a :class:`NamedArray`, otherwise ensure it is a scalar.
+
+    This is useful for APIs that can accept either Python scalars or scalar
+    ``NamedArray`` objects (for example ``roll`` or ``updated_slice``).  If ``x``
+    is a ``NamedArray`` with rank greater than 0 a :class:`TypeError` is raised.
+    """
+
+    if isinstance(x, haliax.NamedArray):
+        if x.ndim != 0:
+            raise TypeError(f"{name} must be a scalar NamedArray")
+        return x.array
+    return x
 
 
 def is_on_mac_metal():

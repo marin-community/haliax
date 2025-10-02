@@ -1,3 +1,8 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
 import string
 from functools import cached_property
 from typing import Optional, Sequence, TypeVar
@@ -23,7 +28,6 @@ from ..core import NamedArray, named
 from ..jax_utils import named_call
 from ..random import uniform
 from ..util import ensure_tuple
-
 
 T = TypeVar("T")
 

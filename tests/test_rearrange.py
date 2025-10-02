@@ -1,10 +1,14 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
 import pytest
 from jax.random import PRNGKey
 
 import haliax as hax
 from haliax import Axis
 from haliax._src.rearrange import einops_rearrange
-
 
 # some axes
 H, W, C, D, B = hax.make_axes(H=6, W=4, C=3, D=2, B=5)

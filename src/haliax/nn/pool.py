@@ -1,3 +1,8 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
 # Pooling operations, inspired by Flax
 from functools import reduce
 from typing import Callable, Literal, Optional
@@ -11,7 +16,6 @@ from ..core import NamedArray
 from ..partitioning import auto_sharded
 from ..types import Scalar
 from ..util import ensure_tuple
-
 
 Padding = Literal["SAME", "VALID"] | int | tuple[tuple[int, int], ...]
 

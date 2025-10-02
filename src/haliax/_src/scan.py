@@ -1,9 +1,16 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
 import dataclasses
 import functools as ft
+import inspect
 from typing import Any, Callable, Literal, ParamSpec, Protocol, Sequence, Tuple, TypeVar, Union, overload
 
 import equinox as eqx
 import jax
+import jax.tree_util as jtu
 from jaxtyping import PyTree
 
 import haliax
@@ -13,7 +20,6 @@ from haliax.axis import Axis, AxisSelector, selects_axis
 from haliax.core import NamedArray
 from haliax.jax_utils import is_jax_array_like, multilevel_scan, tree_checkpoint_name
 from haliax.util import is_jax_or_hax_array_like, is_named_array
-
 
 BoolAxisSpec = Union[bool, Callable[[Any], bool]]
 Carry = TypeVar("Carry")
@@ -29,8 +35,7 @@ def is_named_or_shaped_array_like(x):
 class ScanFn(Protocol[Carry, Args, Y]):
     """ """
 
-    def __call__(self, carry: Carry, *args: Args.args, **kwargs: Args.kwargs) -> tuple[Carry, Y]:
-        ...
+    def __call__(self, carry: Carry, *args: Args.args, **kwargs: Args.kwargs) -> tuple[Carry, Y]: ...
 
 
 @dataclasses.dataclass(frozen=True)
@@ -260,8 +265,7 @@ def scan(
     reverse: bool = False,
     unroll: int = 1,
     is_scanned: BoolAxisSpec = is_named_or_shaped_array_like,
-) -> Callable[[Carry, PyTree[X]], tuple[Carry, PyTree[Y]]]:
-    ...
+) -> Callable[[Carry, PyTree[X]], tuple[Carry, PyTree[Y]]]: ...
 
 
 @overload
@@ -273,8 +277,7 @@ def scan(
     reverse: bool = False,
     unroll: int = 1,
     is_scanned: BoolAxisSpec = is_named_or_shaped_array_like,
-) -> Callable:
-    ...
+) -> Callable: ...
 
 
 def scan(
@@ -357,7 +360,46 @@ def scan(
             return carry, y
 
         true_axis = _infer_axis_size_from_tree(axis_first_xs, axis)
-        axis_size = _infer_axis_size_from_tree(axis_first_xs, axis).size
+        axis_size = true_axis.size
+
+        # build a mapping from positional argument indices to their names for friendlier error messages
+        sig = inspect.signature(f)
+        arg_pos_names: dict[int, str] = {}
+        params = list(sig.parameters.values())[1:]  # skip carry
+        pos_count = 0
+        var_pos_name: str | None = None
+        for param in params:
+            if param.kind in (
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            ):
+                arg_pos_names[pos_count] = param.name
+                pos_count += 1
+            elif param.kind == inspect.Parameter.VAR_POSITIONAL:
+                var_pos_name = param.name
+                break
+        if var_pos_name is not None:
+            for i in range(pos_count, len(args)):
+                arg_pos_names[i] = f"{var_pos_name}[{i - pos_count}]"
+
+        path_leaves, _ = jtu.tree_flatten_with_path(axis_first_xs, is_leaf=is_named_array)
+        mismatched = []
+        for path, leaf in path_leaves:
+            if isinstance(leaf, NamedArray):
+                lead_size = leaf.array.shape[0]
+            elif is_jax_array_like(leaf):
+                lead_size = leaf.shape[0]
+            else:
+                continue
+            if lead_size != axis_size:
+                mismatched.append((path, lead_size))
+        if mismatched:
+            details = ", ".join(
+                f"{_format_tree_path(p, arg_pos_names)} has leading dimension {s}" for p, s in mismatched
+            )
+            raise ValueError(
+                f"scan got `length` argument of {axis_size} but some inputs had different leading axis sizes: {details}"
+            )
 
         nested_scan = checkpoint.nested
         outer_block_size = nested_scan_outer_block(nested_scan, axis_size)
@@ -403,8 +445,7 @@ def fold(
     reverse: bool = False,
     unroll: int = 1,
     is_scanned: BoolAxisSpec = is_named_or_shaped_array_like,
-) -> Callable[[Carry, PyTree[X]], Carry]:
-    ...
+) -> Callable[[Carry, PyTree[X]], Carry]: ...
 
 
 @overload
@@ -416,8 +457,7 @@ def fold(
     reverse: bool = False,
     unroll: int = 1,
     is_scanned: BoolAxisSpec = is_named_or_shaped_array_like,
-) -> Callable:
-    ...
+) -> Callable: ...
 
 
 def fold(
@@ -506,6 +546,34 @@ UnnamedAxisSpec = Union[ResolvedUnnamedAxisSpec, Callable[[Any], ResolvedUnnamed
 
 def _zero_if_array_else_none(x: Any) -> ResolvedUnnamedAxisSpec:
     return 0 if is_jax_array_like(x) else None
+
+
+def _format_tree_path(path: tuple[jtu.KeyEntry, ...], arg_pos_names: dict[int, str] | None = None) -> str:
+    parts: list[str] = []
+    i = 0
+    if len(path) >= 2 and isinstance(path[0], jtu.SequenceKey):
+        if path[0].idx == 0 and isinstance(path[1], jtu.SequenceKey):
+            name = (arg_pos_names or {}).get(path[1].idx)
+            if name is not None:
+                parts.append(name)
+            else:
+                parts.append(f"[{path[1].idx}]")
+            i = 2
+        elif path[0].idx == 1 and isinstance(path[1], jtu.DictKey):
+            parts.append(str(path[1].key))
+            i = 2
+    for p in path[i:]:
+        if isinstance(p, jtu.GetAttrKey):
+            parts.append("." + p.name)
+        elif isinstance(p, jtu.DictKey):
+            parts.append(f"[{p.key!r}]")
+        elif isinstance(p, jtu.SequenceKey):
+            parts.append(f"[{p.idx}]")
+        else:  # pragma: no cover - future-proofing
+            parts.append(str(p))
+    if parts and parts[0].startswith("."):
+        parts[0] = parts[0][1:]
+    return "".join(parts) or "<root>"
 
 
 def _infer_axis_size_from_tree(result, axis):

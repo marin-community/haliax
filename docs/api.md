@@ -6,19 +6,89 @@ arrays (see [haliax.zeros][] and [haliax.ones][]) as well as things like reducti
 
 ## Axis Types
 
-There are four types related to [haliax.Axis][] you will see in the API reference:
+If you already speak NumPy or `jax.numpy`, think of Haliax as swapping positional axes (`axis=0`) for named axes
+(`axis="batch"`). The type hints in this section describe the different ways those named axes can be provided to the API.
+They appear throughout the documentation and in signatures so that you can quickly tell which forms are accepted.
 
-* [haliax.Axis][]: This is the main type for representing axes. It is a dataclass with a name and a size.
-* [haliax.AxisSelector][]: This is a type alias for either [haliax.Axis][] or a `str`. This type is used when we want
-  one axis and the size can be inferred from the inputs.
-* [haliax.AxisSpec][]: This is a type alias for either [haliax.Axis][] or a tuple/list of [haliax.Axis][]. This type is
-  used when we want one or more axes and the sizes cannot be inferred from the inputs, for instance when creating arrays.
-* [haliax.AxisSelection][]: This is a type alias for either [haliax.AxisSelector][] or a tuple/list of [haliax.AxisSelector][].
-    This type is used when we want one or more axes and the sizes can be inferred from the inputs, for instance when
-    reducing an array.
+| Name | Accepts | When to use it | Example |
+| --- | --- | --- | --- |
+| [`Axis`][haliax.Axis] | `Axis(name: str, size: int)` | Define a named dimension with an explicit size | `Batch = Axis("batch", 32)` |
+| [`AxisSelector`][haliax.AxisSelector] | `Axis` or `str` | Refer to an existing axis whose size can be inferred from the arrays you pass in | `x.sum(axis="batch")` |
+| [`AxisSpec`][haliax.AxisSpec] | `dict[str, int]`, `Axis`, or a sequence of `Axis` objects | Create or reshape arrays when the axis sizes must be provided | `hax.zeros((Batch, Feature))` |
+| [`AxisSelection`][haliax.AxisSelection] | `dict[str, int | None]`, `AxisSpec`, or a sequence of `AxisSelector` values | Work with one or more existing axes (reductions, indexing helpers, flattening, …) | `x.sum(axis=("batch", Feature))` |
 
-Occasionally, an axis size can be inferred in some circumstances but not others. When this happens, we still use
-`AxisSelector` but document the behavior in the docstring. A RuntimeError will be raised if the size cannot be inferred.
+### Axis
+
+An [`Axis`][haliax.Axis] is the fundamental building block: it is a tiny dataclass that stores a name and a size.  You can
+construct one directly or use [`haliax.make_axes`][] to generate several at a time.
+
+```python
+import haliax as hax
+from haliax import Axis
+
+Batch = Axis("batch", 32)
+Feature = Axis("feature", 128)
+x = hax.ones((Batch, Feature))
+print(Batch.name, Batch.size)
+```
+
+Using `Axis` objects keeps array creation explicit and gives reusable handles you can share between different tensors.
+Equality compares both the name and size so you get guardrails when wiring pieces together.
+
+### AxisSelector
+
+An [`AxisSelector`][haliax.AxisSelector] accepts either an `Axis` object or just the axis name as a string.  It is used
+whenever a function can read the axis size from one of its arguments.  This mirrors how NumPy lets you pass `axis=0` when
+reducing an array:
+
+```python
+total = x.sum(axis=Batch)       # using the Axis handle
+same_total = x.sum(axis="batch")  # using only the name
+```
+
+Strings are convenient when you only care about the name, but `Axis` objects still work so you can keep using the handles
+you created earlier.  If an axis with that name is missing, Haliax raises a `ValueError`.
+
+### AxisSpec
+
+An [`AxisSpec`][haliax.AxisSpec] is used when Haliax needs full size information to create or reshape an array.  You can
+provide a shape dictionary (sometimes called a "shape dict") that maps names to sizes, or a sequence of `Axis` objects:
+
+```python
+shape = {"batch": 32, "feature": 128}
+y = hax.zeros(shape)                 # using a shape dict
+z = hax.zeros((Batch, Feature))      # using the Axis objects directly
+```
+
+Both forms describe the same layout.  Python dictionaries preserve insertion order, so the ordering in a shape dict matches
+the order that axes appear in the array.  Sequences must contain `Axis` objects (not plain strings) because Haliax cannot
+otherwise know the axis sizes.
+
+### AxisSelection
+
+[`AxisSelection`][haliax.AxisSelection] generalizes the previous aliases so you can talk about several axes at once.  It
+shows up in reductions, indexing helpers, axis-mapping utilities, and anywhere you might have written `axis=(0, 1)` in
+NumPy.  You may supply:
+
+* a sequence mixing `Axis` objects and strings, e.g. `("batch", Feature)` when reducing two axes,
+* an `AxisSpec`, which is handy when you already have a tuple of `Axis` objects, or
+* a "partial shape dict" where the values are either sizes or `None` to indicate "any size".  Dictionaries are useful when
+  you only care about a subset of axes or want to assert a particular size.
+
+```python
+# Reduce over two axes using a tuple of selectors.
+scalar = x.sum(axis=("batch", Feature))
+
+# Ask for the axes by name and optionally pin sizes.
+x.resolve_axis({"batch": None, "feature": None})  # returns {"batch": 32, "feature": 128}
+
+from haliax.axis import selects_axis
+assert selects_axis((Batch, "feature"), {"batch": None, "feature": 128})
+```
+
+Occasionally, an axis size can be inferred in some circumstances but not others. When this happens we still use
+`AxisSelector` (or `AxisSelection` for multiple axes) but document the behavior in the docstring. A `RuntimeError` will be
+raised if the size cannot be inferred.
 
 ::: haliax.Axis
 ::: haliax.AxisSelector
@@ -128,12 +198,22 @@ You can convert it to a [jax.numpy.ndarray][] with [haliax.NamedArray.scalar][],
 
 ::: haliax.all
 ::: haliax.amax
+::: haliax.amin
 ::: haliax.any
 ::: haliax.argmax
 ::: haliax.argmin
 ::: haliax.max
 ::: haliax.mean
 ::: haliax.min
+::: haliax.nanargmax
+::: haliax.nanargmin
+::: haliax.nanmax
+::: haliax.nanmean
+::: haliax.nanmin
+::: haliax.nanprod
+::: haliax.nanstd
+::: haliax.nansum
+::: haliax.nanvar
 ::: haliax.prod
 ::: haliax.ptp
 ::: haliax.std
@@ -146,6 +226,8 @@ don't reduce it.
 
 ::: haliax.cumsum
 ::: haliax.cumprod
+::: haliax.nancumprod
+::: haliax.nancumsum
 ::: haliax.sort
 ::: haliax.argsort
 
@@ -164,6 +246,8 @@ These are all more or less directly from JAX's NumPy API.
 ::: haliax.arctan
 ::: haliax.arctanh
 ::: haliax.around
+::: haliax.bitwise_count
+::: haliax.bitwise_invert
 ::: haliax.bitwise_not
 ::: haliax.cbrt
 ::: haliax.ceil
@@ -221,7 +305,9 @@ These are all more or less directly from JAX's NumPy API.
 ::: haliax.add
 ::: haliax.arctan2
 ::: haliax.bitwise_and
+::: haliax.bitwise_left_shift
 ::: haliax.bitwise_or
+::: haliax.bitwise_right_shift
 ::: haliax.bitwise_xor
 ::: haliax.divide
 ::: haliax.divmod
@@ -254,16 +340,82 @@ These are all more or less directly from JAX's NumPy API.
 ::: haliax.subtract
 ::: haliax.true_divide
 
+### Polynomial Operations
+
+::: haliax.poly
+::: haliax.polyadd
+::: haliax.polysub
+::: haliax.polymul
+::: haliax.polydiv
+::: haliax.polyint
+::: haliax.polyder
+::: haliax.polyval
+::: haliax.polyfit
+::: haliax.roots
+::: haliax.trim_zeros
+::: haliax.vander
+
 ### Other Operations
 
+::: haliax.bincount
 ::: haliax.clip
+::: haliax.packbits
+::: haliax.unpackbits
 ::: haliax.isclose
+::: haliax.allclose
+::: haliax.array_equal
+::: haliax.array_equiv
 ::: haliax.pad
+::: haliax.searchsorted
 ::: haliax.top_k
+::: haliax.nonzero
 ::: haliax.trace
 ::: haliax.tril
 ::: haliax.triu
 ::: haliax.where
+
+### FFT
+
+All FFT helpers accept an ``axis`` argument which may be a single axis, its
+name, or an ordered mapping from axes to output sizes.  Passing a mapping
+dispatches to the ``n``‑dimensional variants in :mod:`jax.numpy.fft`.
+
+For example::
+
+    import jax.numpy as jnp
+    import haliax as hax
+
+    T = hax.Axis("time", 8)
+    signal = hax.arange(T, dtype=jnp.float32)
+
+    # operate along a single axis specified by name
+    hax.fft(signal, axis="time")
+
+    # resize by passing an Axis object
+    hax.fft(signal, axis=hax.Axis("time", 16))
+
+    X, Y = hax.make_axes(X=4, Y=6)
+    image = hax.arange((X, Y), dtype=jnp.float32)
+
+    # transform across several axes in order by passing a sequence
+    hax.fft(image, axis=("X", "Y"))
+
+    # selectively resize axes by providing a mapping
+    hax.fft(image, axis={"X": None, "Y": hax.Axis("Y", 10)})
+
+    # mappings can cover just a subset of axes when only partial resizing is needed
+    hax.fft(image, axis={"Y": 10})
+
+::: haliax.fft
+::: haliax.ifft
+::: haliax.hfft
+::: haliax.ihfft
+::: haliax.rfft
+::: haliax.irfft
+::: haliax.fftfreq
+::: haliax.rfftfreq
+::: haliax.fftshift
+::: haliax.ifftshift
 
 
 

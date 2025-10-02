@@ -1,3 +1,8 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
 import dataclasses
 from typing import List, Tuple, Union, Sequence
 
@@ -12,7 +17,6 @@ from haliax.axis import Axis
 from haliax.util import is_jax_or_hax_array_like
 
 from ._src.util import IdentityMap
-
 
 ArrayLike = Union[jnp.ndarray, NamedArray]
 

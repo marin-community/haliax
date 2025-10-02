@@ -1,8 +1,12 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
 from functools import partial
 
 from jax import custom_jvp, custom_vjp, lax
 from jax import numpy as jnp
-
 
 # All of this is copy paste from flax/linen/fp8_ops.py
 # (Until we get to the module)

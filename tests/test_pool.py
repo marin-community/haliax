@@ -1,3 +1,8 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
 import equinox as eqx
 import jax
 import jax.numpy as jnp
@@ -5,7 +10,6 @@ import jax.numpy as jnp
 import haliax
 import haliax as hax
 from haliax.nn.pool import max_pool, mean_pool
-
 
 # Tests largely cribbed from equinox
 

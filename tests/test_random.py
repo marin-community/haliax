@@ -1,3 +1,8 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
 from typing import Callable
 
 import jax
@@ -6,7 +11,6 @@ from jaxtyping import PRNGKeyArray
 
 import haliax as hax
 from haliax.axis import axis_spec_to_shape_dict
-
 
 Height = hax.Axis("Height", 4)
 Width = hax.Axis("Width", 8)

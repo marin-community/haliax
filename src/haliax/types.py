@@ -1,10 +1,14 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
 from typing import Any, Callable, Literal, Protocol, Tuple, TypeAlias, Union
 
 import jax.numpy as jnp
 import numpy as np
 from jax.lax import Precision
 from jaxtyping import PyTree
-
 
 DType: TypeAlias = np.dtype
 
@@ -14,8 +18,7 @@ except ImportError:
     # Cribbed from jax.typing, for older versions of JAX
     class SupportsDType(Protocol):
         @property
-        def dtype(self) -> DType:
-            ...
+        def dtype(self) -> DType: ...
 
     DTypeLike = Union[
         str,  # like 'float32', 'int32'

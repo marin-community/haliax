@@ -25,6 +25,75 @@ Most functions accept either axes or shape dicts interchangeably.
 
 A tensor with named axes is a [`NamedArray`][haliax.NamedArray]. Elementwise operations mirror `jax.numpy` but accept named axes.
 
+### Ways to Describe Axes
+
+If you're used to `axis=0` style code in NumPy or JAX, think of Haliax as swapping those positional indices for names
+like `axis="batch"`. The API hints refer to a few helper aliases; this table shows how they map back to familiar
+concepts:
+
+| Name | Accepts | Typical use | Example |
+| --- | --- | --- | --- |
+| [`Axis`][haliax.Axis] | `Axis(name: str, size: int)` | Define a named dimension with a fixed size | `Batch = Axis("batch", 32)` |
+| [`AxisSelector`][haliax.AxisSelector] | `Axis` or `str` | Refer to an existing axis when the size can be inferred from the argument | `x.sum(axis="batch")` |
+| [`AxisSpec`][haliax.AxisSpec] | `dict[str, int]`, `Axis`, or a sequence of `Axis` objects | Supply complete shape information (array creation, reshaping) | `hax.zeros((Batch, Feature))` |
+| [`AxisSelection`][haliax.AxisSelection] | `dict[str, int | None]`, `AxisSpec`, or a sequence of `AxisSelector` values | Work with one or more existing axes (reductions, indexing helpers, flattening, …) | `x.sum(axis=("batch", Feature))` |
+
+The following sections expand on each alias with quick references and NumPy-style parallels.
+
+#### `Axis`: reusable named dimensions
+
+An [`Axis`][haliax.Axis] stores a `name` and a `size`. Create them directly or let
+[`haliax.make_axes`][] build a handful at once. Because axes compare by both name and size, they act as reusable handles and
+catch many wiring mistakes early.
+
+```python
+Batch = Axis("batch", 32)
+Feature = Axis("feature", 128)
+x = hax.ones((Batch, Feature))
+print(Batch.name, Batch.size)
+```
+
+#### `AxisSelector`: when the size is already known
+
+Many functions already see the array whose axes you're referencing (e.g. reductions). In those cases you can pass either the
+`Axis` object or simply the axis name as a string. Haliax resolves the name against the array, similar to `axis=0` in NumPy.
+
+```python
+total = x.sum(axis=Batch)       # use the Axis handle
+same_total = x.sum(axis="batch")  # or just the name
+```
+
+If you reference an axis name that isn't present, Haliax raises a `ValueError`.
+
+#### `AxisSpec`: describing complete shapes
+
+When Haliax needs explicit sizes—creating arrays, reshaping, broadcasting to a new axis—you provide an [`AxisSpec`][haliax.AxisSpec].
+Shape dictionaries keep things close to standard Python, while sequences require actual `Axis` objects so the sizes stay explicit.
+
+```python
+shape = {"batch": 32, "feature": 128}
+y = hax.zeros(shape)                 # using a shape dict
+z = hax.zeros((Batch, Feature))      # or a sequence of Axis objects
+```
+
+Python dictionaries preserve insertion order, so the layout in a shape dict matches the order of axes in the resulting array.
+
+#### `AxisSelection`: several axes at once
+
+[`AxisSelection`][haliax.AxisSelection] is the plural form used by reductions, indexing helpers, and flattening utilities. Supply a
+tuple mixing `Axis` objects and strings, reuse an existing `AxisSpec`, or pass a partial shape dict where values are either
+sizes or `None` for "any size".
+
+```python
+scalar = x.sum(axis=("batch", Feature))
+
+# Ask for the axes by name and optionally pin sizes.
+x.resolve_axis({"batch": None, "feature": None})  # returns {"batch": 32, "feature": 128}
+```
+
+Partial shape dicts shine when you only care about a subset of axes or want assertions about their sizes. If the axis size
+cannot be inferred from the provided arguments, Haliax raises a `RuntimeError`.
+
 ## Indexing and Broadcasting
 
 Use axis names when slicing. Dictionaries are convenient for several axes:

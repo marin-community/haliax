@@ -1,3 +1,8 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
 import equinox as eqx
 import jax.numpy as jnp
 from jax.random import PRNGKey
@@ -5,6 +10,7 @@ from jax.random import PRNGKey
 import haliax as hax
 from haliax import Axis, NamedArray
 from haliax.util import is_named_array
+import pytest
 
 
 def test_scan():
@@ -134,6 +140,38 @@ def test_scan_hierarchical():
 
     assert jnp.all(jnp.isclose(total, total_blocked))
     assert jnp.all(jnp.equal(selected.array, selected_blocked.array))
+
+
+def test_scan_reports_mismatched_unnamed_array():
+    Height = Axis("Height", 2)
+
+    def f(c, x, y):
+        return c, x + y
+
+    good = jnp.zeros((Height.size, 3))
+    bad = jnp.zeros((Height.size - 1, 3))
+
+    with pytest.raises(ValueError) as e:
+        hax.scan(f, Height)(0, good, y=bad)
+
+    assert "y has leading dimension" in str(e.value)
+
+
+def test_scan_reports_eqx_module_field_path():
+    Height = Axis("Height", 2)
+
+    class Foo(eqx.Module):
+        my_array: jnp.ndarray
+
+    foo = Foo(jnp.zeros((Height.size - 1, 3)))
+
+    def f(c, foo):
+        return c, foo.my_array
+
+    with pytest.raises(ValueError) as e:
+        hax.scan(f, Height)(0, foo)
+
+    assert "foo.my_array" in str(e.value)
 
 
 def test_fold():

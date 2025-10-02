@@ -1,3 +1,8 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
 import dataclasses
 from abc import abstractmethod
 from typing import Optional, TypeVar
@@ -14,7 +19,6 @@ from ..axis import AxisSelection, AxisSpec
 from ..core import NamedArray
 from ..types import Scalar
 from ..wrap import unwrap_namedarrays, wrap_axiswise_call, wrap_reduction_call
-
 
 A = TypeVar("A", Scalar, NamedArray, jnp.ndarray)
 
@@ -93,6 +97,7 @@ class LayerNorm(LayerNormBase):
     Normalises the input along the specified axis (or axes), using the mean and variance of the
     input along that axis.
     """
+
     axis: AxisSpec = eqx.field(static=True)
     weight: Optional[NamedArray]
     bias: Optional[NamedArray]

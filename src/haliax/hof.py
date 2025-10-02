@@ -1,3 +1,8 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
 import inspect
 from functools import wraps
 
@@ -76,9 +81,11 @@ def vmap(
     # axis_spec_bound_sig's job is to hold that mapping
     signature_default = signature.replace(
         parameters=[
-            p
-            if p.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
-            else p.replace(default=default)
+            (
+                p
+                if p.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+                else p.replace(default=default)
+            )
             for p in signature.parameters.values()
         ]
     )

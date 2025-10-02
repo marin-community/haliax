@@ -1,3 +1,8 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
 from typing import Callable, Optional, Sequence
 
 import equinox as eqx
@@ -10,7 +15,6 @@ from ..jax_utils import maybe_rng_split
 from ..quantization import DotGeneralOp
 from .activations import relu
 from .linear import Linear
-
 
 DEFAULT_WIDTH_NAME = "mlp"
 

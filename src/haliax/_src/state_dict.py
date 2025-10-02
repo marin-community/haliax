@@ -1,3 +1,8 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
 # Module to support torch-style "state dict" serialization via safetensors
 import dataclasses
 import typing
@@ -18,7 +23,6 @@ from haliax._src.util import index_where
 from haliax.core import NamedArray, named
 from haliax.jax_utils import is_jax_array_like, is_scalarish
 from haliax.tree_util import scan_aware_tree_map
-
 
 try:
     import safetensors
@@ -92,6 +96,7 @@ def _flatten_to_unflatten(t, state_dict, prefix):
     """
     Flatten the torch compatible state_dict before loading into t, and then recover the unflattened layers.
     """
+
     # typically, `t` is a bunch of ShapeDtypeStructs, which can't be transposed etc. so we instead have to zeros()
     # into real arrays (that aren't actually real b/c this is inside a jit)
     def _dt_struct_to_array(struct):
@@ -107,18 +112,15 @@ def _flatten_to_unflatten(t, state_dict, prefix):
 
 
 @typing.overload
-def with_prefix(prefix: str | None, leaf: str) -> str:
-    ...
+def with_prefix(prefix: str | None, leaf: str) -> str: ...
 
 
 @typing.overload
-def with_prefix(prefix: str, leaf: None) -> str:
-    ...
+def with_prefix(prefix: str, leaf: None) -> str: ...
 
 
 @typing.overload
-def with_prefix(prefix: Optional[str], leaf: Optional[str]) -> Optional[str]:
-    ...
+def with_prefix(prefix: Optional[str], leaf: Optional[str]) -> Optional[str]: ...
 
 
 def with_prefix(prefix: Optional[str], leaf: Optional[str]) -> Optional[str]:
@@ -195,7 +197,7 @@ def from_state_dict(tree: T, state_dict: StateDict, prefix: Optional[str] = None
         array = state_dict[prefix]
 
         if isinstance(array, np.ndarray):
-            mesh = partitioning._get_mesh()
+            mesh = jax.sharding.get_abstract_mesh()
             # TODO: modernize this
             if jax.device_count() > 1:  # this happens with the default mesh
                 pspec = partitioning.pspec_for_axis(tree.axes)

@@ -1,3 +1,8 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
 import typing
 
 from jax import nn as jnn
@@ -7,7 +12,6 @@ from ..axis import Axis
 from ..core import NamedArray
 from ..types import Scalar
 from ..wrap import wrap_elemwise_unary
-
 
 A = typing.TypeVar("A", Scalar, NamedArray, jnp.ndarray)
 

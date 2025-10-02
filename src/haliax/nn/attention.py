@@ -1,3 +1,8 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
 import math
 from typing import List, Optional
 
@@ -11,7 +16,6 @@ import haliax.random as hrandom
 from haliax.axis import Axis, AxisSelection, AxisSelector, AxisSpec, axis_name, axis_spec_to_shape_dict
 from haliax.core import NamedArray
 from haliax.types import PrecisionLike
-
 
 # With attention, we usually distinguish between the mask and the bias, though the former is just a special case of the
 # latter. In practice, the mask is a boolean array that is applied using `where` to the logits, while the bias is a
@@ -155,7 +159,7 @@ def combine_masks_or(mask1: Optional[NamedArray], mask2: Optional[NamedArray]) -
     return mask1 | mask2.broadcast_axis(mask1.axes)
 
 
-def causal_mask(QPos: Axis, KPos: Axis, q_start: int | NamedArray = 0, k_start: int  | NamedArray= 0) -> NamedArray:
+def causal_mask(QPos: Axis, KPos: Axis, q_start: int | NamedArray = 0, k_start: int | NamedArray = 0) -> NamedArray:
     """
     Creates a materialized causal mask for attention.
 

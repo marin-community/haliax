@@ -1,3 +1,8 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
 from typing import Callable
 
 import equinox as eqx
@@ -56,6 +61,24 @@ def test_one_hot():
     actual = hax.nn.one_hot(hax.NamedArray(jnp.array([1, 2, 0]), (i,)), c)
     expected = jnp.array([[0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [1.0, 0.0, 0.0]])
     assert actual.axes == (i, c)
+    assert jnp.all(jnp.isclose(actual.array, expected))
+
+
+def test_one_hot_scalar_array():
+    (c,) = hax.make_axes(c=3)
+
+    scalar_value = jnp.array(1, dtype=jnp.int32)
+    actual = hax.nn.one_hot(scalar_value, c)
+    expected = jnp.array([0.0, 1.0, 0.0])
+
+    assert actual.axes == (c,)
+    assert jnp.all(jnp.isclose(actual.array, expected))
+
+    negative_scalar = jnp.array(-1, dtype=jnp.int32)
+    actual = hax.nn.one_hot(negative_scalar, c)
+    expected = jnp.array([0.0, 0.0, 1.0])
+
+    assert actual.axes == (c,)
     assert jnp.all(jnp.isclose(actual.array, expected))
 
 

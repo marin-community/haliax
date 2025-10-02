@@ -1,3 +1,8 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
 import dataclasses
 import math
 from typing import Optional
@@ -239,7 +244,7 @@ class MoELinear(eqx.Module):
             return self.weight.axes[-len(self.Out) :] != self.Out
 
 
-def _gmm(lhs, rhs, group_sizes, out_axes, sharded=False, ar=False):
+def _gmm(lhs, rhs, group_sizes, out_axes, sharded: bool = False, ar: bool = False):
     def gmm_impl(lhs, rhs, group_sizes):
         out = gmm_sharded(lhs.array, rhs.array, group_sizes.array, ar=ar)
         return hax.NamedArray(out, axes=out_axes)
@@ -247,7 +252,17 @@ def _gmm(lhs, rhs, group_sizes, out_axes, sharded=False, ar=False):
     if sharded:
         return gmm_impl(lhs, rhs, group_sizes)
 
-    gmm_fn = shard_map(gmm_impl, check_rep=False)
+    mesh = jax.sharding.get_abstract_mesh()
+    shard_map_kwargs = {"check_rep": False}
+    if mesh is not None and not getattr(mesh, "empty", False):
+        shard_map_kwargs["mesh"] = mesh
+
+    gmm_fn = shard_map(
+        gmm_impl,
+        in_specs=(lhs.axes, rhs.axes, group_sizes.axes),
+        out_specs=out_axes,
+        **shard_map_kwargs,
+    )
     return gmm_fn(lhs, rhs, group_sizes)
 
 

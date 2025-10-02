@@ -1,3 +1,8 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
 # Support for FP8
 # Much of this is lifted from FLAX
 # https://github.com/google/flax/blob/main/flax/linen/fp8_ops.py
@@ -23,7 +28,6 @@ from haliax.types import PrecisionLike
 from ._src.fp8 import dot_general_with_precision, in_qdq, out_qdq
 from .axis import Axis
 from .hof import vmap
-
 
 T = TypeVar("T")
 
@@ -104,8 +108,7 @@ class DotGeneralOp(Protocol):
         dimension_numbers,
         precision: PrecisionLike = None,
         preferred_element_type: DTypeLike | None = None,
-    ) -> jnp.ndarray:
-        ...
+    ) -> jnp.ndarray: ...
 
     @staticmethod
     def default():

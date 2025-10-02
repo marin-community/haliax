@@ -1,3 +1,8 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
 import typing
 from dataclasses import dataclass
 from math import prod
@@ -88,8 +93,7 @@ def selects_axis(selector: AxisSelection, selected: AxisSelection) -> bool:
     return True
 
 
-class _Sentinel:
-    ...
+class _Sentinel: ...
 
 
 def is_axis_compatible(ax1: AxisSelector, ax2: AxisSelector):
@@ -140,23 +144,19 @@ def axis_spec_to_shape_dict(axis_spec: AxisSelection) -> dict[str, Optional[int]
 
 
 @typing.overload
-def axis_spec_to_tuple(axis_spec: ShapeDict) -> tuple[Axis, ...]:
-    ...
+def axis_spec_to_tuple(axis_spec: ShapeDict) -> tuple[Axis, ...]: ...
 
 
 @typing.overload
-def axis_spec_to_tuple(axis_spec: AxisSpec) -> tuple[Axis, ...]:
-    ...
+def axis_spec_to_tuple(axis_spec: AxisSpec) -> tuple[Axis, ...]: ...
 
 
 @typing.overload
-def axis_spec_to_tuple(axis_spec: PartialShapeDict) -> tuple[AxisSelector, ...]:
-    ...
+def axis_spec_to_tuple(axis_spec: PartialShapeDict) -> tuple[AxisSelector, ...]: ...
 
 
 @typing.overload
-def axis_spec_to_tuple(axis_spec: AxisSelection) -> tuple[AxisSelector, ...]:
-    ...
+def axis_spec_to_tuple(axis_spec: AxisSelection) -> tuple[AxisSelector, ...]: ...
 
 
 def axis_spec_to_tuple(axis_spec: AxisSelection) -> tuple[AxisSelector, ...]:
@@ -230,23 +230,19 @@ def concat_axes(a1, a2):
 
 
 @typing.overload
-def union_axes(a1: ShapeDict, a2: AxisSpec) -> ShapeDict:
-    ...
+def union_axes(a1: ShapeDict, a2: AxisSpec) -> ShapeDict: ...
 
 
 @typing.overload
-def union_axes(a1: AxisSpec, a2: ShapeDict) -> ShapeDict:
-    ...
+def union_axes(a1: AxisSpec, a2: ShapeDict) -> ShapeDict: ...
 
 
 @typing.overload
-def union_axes(a1: AxisSpec, a2: AxisSpec) -> AxisSpec:
-    ...
+def union_axes(a1: AxisSpec, a2: AxisSpec) -> AxisSpec: ...
 
 
 @typing.overload
-def union_axes(a1: AxisSelection, a2: AxisSelection) -> AxisSelection:
-    ...
+def union_axes(a1: AxisSelection, a2: AxisSelection) -> AxisSelection: ...
 
 
 def union_axes(a1: AxisSelection, a2: AxisSelection) -> AxisSelection:
@@ -372,23 +368,19 @@ def without_axes(axis_spec: AxisSelection, to_remove: AxisSelection, allow_misma
 
 
 @typing.overload
-def unsize_axes(axis_spec: PartialShapeDict, to_unsize: AxisSelection) -> PartialShapeDict:
-    ...
+def unsize_axes(axis_spec: PartialShapeDict, to_unsize: AxisSelection) -> PartialShapeDict: ...
 
 
 @typing.overload
-def unsize_axes(axis_spec: AxisSelection, to_unsize: AxisSelection) -> AxisSelection:
-    ...
+def unsize_axes(axis_spec: AxisSelection, to_unsize: AxisSelection) -> AxisSelection: ...
 
 
 @typing.overload
-def unsize_axes(axis_spec: PartialShapeDict) -> PartialShapeDict:
-    ...
+def unsize_axes(axis_spec: PartialShapeDict) -> PartialShapeDict: ...
 
 
 @typing.overload
-def unsize_axes(axis_spec: AxisSelection) -> AxisSelection:
-    ...
+def unsize_axes(axis_spec: AxisSelection) -> AxisSelection: ...
 
 
 def unsize_axes(axis_spec: AxisSelection, to_unsize: Optional[AxisSelection] = None) -> AxisSelection:
@@ -424,13 +416,11 @@ def unsize_axes(axis_spec: AxisSelection, to_unsize: Optional[AxisSelection] = N
 
 
 @overload
-def replace_axis(axis_spec: AxisSpec, old: AxisSelector, new: AxisSpec) -> AxisSpec:
-    ...
+def replace_axis(axis_spec: AxisSpec, old: AxisSelector, new: AxisSpec) -> AxisSpec: ...
 
 
 @overload
-def replace_axis(axis_spec: AxisSelection, old: AxisSelector, new: AxisSelection) -> AxisSelection:
-    ...
+def replace_axis(axis_spec: AxisSelection, old: AxisSelector, new: AxisSelection) -> AxisSelection: ...
 
 
 def replace_axis(axis_spec: AxisSelection, old: AxisSelector, new: AxisSelection) -> AxisSelection:
@@ -466,13 +456,11 @@ def replace_axis(axis_spec: AxisSelection, old: AxisSelector, new: AxisSelection
 
 
 @overload
-def intersect_axes(ax1: ShapeDict, ax2: AxisSelection) -> ShapeDict:
-    ...
+def intersect_axes(ax1: ShapeDict, ax2: AxisSelection) -> ShapeDict: ...
 
 
 @overload
-def intersect_axes(ax1: tuple[AxisSelector, ...], ax2: AxisSpec) -> tuple[Axis, ...]:
-    ...
+def intersect_axes(ax1: tuple[AxisSelector, ...], ax2: AxisSpec) -> tuple[Axis, ...]: ...
 
 
 @overload
@@ -550,13 +538,11 @@ def axis_size(ax: AxisSpec) -> int:
 
 
 @typing.overload
-def resolve_axis(axis_spec: AxisSpec, axis_selection: AxisSelector) -> Axis:
-    ...
+def resolve_axis(axis_spec: AxisSpec, axis_selection: AxisSelector) -> Axis: ...
 
 
 @typing.overload
-def resolve_axis(axis_spec: AxisSpec, axis_selection: AxisSelection) -> AxisSpec:
-    ...
+def resolve_axis(axis_spec: AxisSpec, axis_selection: AxisSelection) -> AxisSpec: ...
 
 
 def resolve_axis(axis_spec: AxisSpec, axis_selection: AxisSelection) -> AxisSpec:

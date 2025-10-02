@@ -1,3 +1,8 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
 from typing import Optional, Protocol
 
 import jax
@@ -5,7 +10,7 @@ import jax
 from haliax.core import NamedArray, _broadcast_order, broadcast_to
 
 from .axis import AxisSelection, AxisSelector, axis_spec_to_shape_dict, eliminate_axes
-from .jax_utils import is_scalarish
+from .jax_utils import ensure_scalar, is_scalarish
 
 
 def wrap_elemwise_unary(f, a, *args, **kwargs):
@@ -105,7 +110,7 @@ def wrap_elemwise_binary(op):
             else:
                 if is_scalarish(b):
                     return NamedArray(op(a.array, b), a.axes)
-                a = a.scalar()
+                a = ensure_scalar(a)
                 return op(a, b)
 
             return NamedArray(op(a.array, b), a.axes)
@@ -119,7 +124,7 @@ def wrap_elemwise_binary(op):
             else:
                 if is_scalarish(a):
                     return NamedArray(op(a, b.array), b.axes)
-                b = b.scalar()
+                b = ensure_scalar(b)
                 return op(a, b)
 
             return NamedArray(op(a, b.array), b.axes)
@@ -140,13 +145,11 @@ class ReductionFunction(Protocol):
         axis: Optional[AxisSelection] = None,
         where: Optional[NamedArray] = None,
         **kwargs,
-    ) -> NamedArray:
-        ...
+    ) -> NamedArray: ...
 
 
 class SimpleReductionFunction(Protocol):
-    def __call__(self, array: NamedArray, axis: Optional[AxisSelector] = None, **kwargs) -> NamedArray:
-        ...
+    def __call__(self, array: NamedArray, axis: Optional[AxisSelector] = None, **kwargs) -> NamedArray: ...
 
 
 __all__ = [

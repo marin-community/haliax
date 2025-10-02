@@ -1,3 +1,8 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
 import equinox as eqx
 import jax
 import pytest
@@ -734,6 +739,7 @@ def test_vmap_via_blockseq_multi_args():
 
 def test_vmap_via_consistency():
     """Test that vmap_via gives the same results as vmap for Stacked."""
+
     class Module(eqx.Module):
         w: hax.NamedArray
 

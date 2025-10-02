@@ -1,3 +1,8 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
 from typing import Optional, TypeVar
 
 import equinox
@@ -18,7 +23,6 @@ from ._src.state_dict import (
     unflatten_modules_from_export,
     with_prefix,
 )
-
 
 T = TypeVar("T")
 

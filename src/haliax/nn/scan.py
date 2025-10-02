@@ -1,9 +1,27 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
 import dataclasses
 import functools
 import re
 import warnings
-from typing import Any, Callable, Concatenate, Dict, Generic, Optional, Protocol, Sequence, Type, TypeVar, cast, \
-    overload, ParamSpec
+from typing import (
+    Any,
+    Callable,
+    Concatenate,
+    Dict,
+    Generic,
+    Optional,
+    Protocol,
+    Sequence,
+    Type,
+    TypeVar,
+    cast,
+    overload,
+    ParamSpec,
+)
 
 import equinox as eqx
 import jax
@@ -18,7 +36,6 @@ from .._src.scan import ScanCheckpointPolicy, ScanCheckpointSpec
 from .._src.state_dict import ModuleWithStateDictSerialization, StateDict, with_prefix
 from ..axis import Axis
 
-
 M = TypeVar("M", bound=eqx.Module)
 M_co = TypeVar("M_co", bound=eqx.Module, covariant=True)
 M_contra = TypeVar("M_contra", bound=eqx.Module, contravariant=True)
@@ -28,24 +45,23 @@ CarryT = TypeVar("CarryT")
 OutputT_co = TypeVar("OutputT_co", covariant=True)
 P = ParamSpec("P")
 
+
 class FoldFunction(Protocol[M_contra, P, CarryT]):
-    def __call__(self, module: M_contra, carry: CarryT, *args: P.args, **kwargs: P.kwargs) -> CarryT:
-        ...
+    def __call__(self, module: M_contra, carry: CarryT, *args: P.args, **kwargs: P.kwargs) -> CarryT: ...
 
 
 class ScanFunction(Protocol[M_contra, CarryT, P, OutputT_co]):
-    def __call__(self, module: M_contra, carry: CarryT, *args: P.args, **kwargs: P.kwargs) -> tuple[CarryT, OutputT_co]:
-        ...
+    def __call__(
+        self, module: M_contra, carry: CarryT, *args: P.args, **kwargs: P.kwargs
+    ) -> tuple[CarryT, OutputT_co]: ...
 
 
 class VmapFunction(Protocol[M_contra, P, OutputT_co]):
-    def __call__(self, module: M_contra, *args: P.args, **kwargs: P.kwargs) -> OutputT_co:
-        ...
+    def __call__(self, module: M_contra, *args: P.args, **kwargs: P.kwargs) -> OutputT_co: ...
 
 
 class ModuleInit(Protocol[M_co]):
-    def __call__(self, *args, **kwargs) -> M_co:
-        ...
+    def __call__(self, *args, **kwargs) -> M_co: ...
 
 
 class BlockFoldable(Protocol[M]):
@@ -68,47 +84,39 @@ class BlockFoldable(Protocol[M]):
         *,
         gradient_checkpointing: ScanCheckpointSpec = False,
         prevent_cse: bool = False,
-    ) -> ModuleInit[S]:
-        ...
+    ) -> ModuleInit[S]: ...
 
-    def scan(self, init: T, *extra_args, **extra_kwargs):
-        ...
+    def scan(self, init: T, *extra_args, **extra_kwargs): ...
 
-    def fold(self, init: T, *args, **kwargs) -> T:
-        ...
+    def fold(self, init: T, *args, **kwargs) -> T: ...
 
     @overload
-    def fold_via(self, fn: FoldFunction[M, P, CarryT]) -> Callable[Concatenate[CarryT, P], CarryT]:
-        ...
+    def fold_via(self, fn: FoldFunction[M, P, CarryT]) -> Callable[Concatenate[CarryT, P], CarryT]: ...
 
     @overload
-    def fold_via(self, fn: Callable[[M, CarryT], CarryT]) -> Callable[[CarryT], CarryT]:
-        ...
+    def fold_via(self, fn: Callable[[M, CarryT], CarryT]) -> Callable[[CarryT], CarryT]: ...
 
-    def fold_via(self, fn: Callable[..., CarryT]) -> Callable[Concatenate[CarryT, P], CarryT]:
-        ...
+    def fold_via(self, fn: Callable[..., CarryT]) -> Callable[Concatenate[CarryT, P], CarryT]: ...
 
     @overload
-    def scan_via(self, fn: ScanFunction[M, CarryT, P, OutputT_co]) -> Callable[Concatenate[CarryT, P], tuple[CarryT, OutputT_co]]:
-        ...
+    def scan_via(
+        self, fn: ScanFunction[M, CarryT, P, OutputT_co]
+    ) -> Callable[Concatenate[CarryT, P], tuple[CarryT, OutputT_co]]: ...
 
     @overload
-    def scan_via(self, fn: Callable[[M, CarryT], tuple[CarryT, OutputT_co]]) -> Callable[[CarryT], tuple[CarryT, OutputT_co]]:
-        ...
+    def scan_via(
+        self, fn: Callable[[M, CarryT], tuple[CarryT, OutputT_co]]
+    ) -> Callable[[CarryT], tuple[CarryT, OutputT_co]]: ...
 
-    def scan_via(self, fn: Callable[..., tuple[CarryT, OutputT_co]]) -> Callable[P, tuple[CarryT, OutputT_co]]:
-        ...
-
-    @overload
-    def vmap_via(self, fn: VmapFunction[M, P, OutputT_co]) -> Callable[P, OutputT_co]:
-        ...
+    def scan_via(self, fn: Callable[..., tuple[CarryT, OutputT_co]]) -> Callable[P, tuple[CarryT, OutputT_co]]: ...
 
     @overload
-    def vmap_via(self, fn: Callable[[M], OutputT_co]) -> Callable[[], OutputT_co]:
-        ...
+    def vmap_via(self, fn: VmapFunction[M, P, OutputT_co]) -> Callable[P, OutputT_co]: ...
 
-    def vmap_via(self, fn: Callable[..., OutputT_co]) -> Callable[..., OutputT_co]:
-        ...
+    @overload
+    def vmap_via(self, fn: Callable[[M], OutputT_co]) -> Callable[[], OutputT_co]: ...
+
+    def vmap_via(self, fn: Callable[..., OutputT_co]) -> Callable[..., OutputT_co]: ...
 
     def unstacked(self) -> Sequence[M]:
         """
@@ -218,12 +226,10 @@ class BlockSeq(ModuleWithStateDictSerialization, Generic[M]):
         return do_fold(init, *args, **kwargs)
 
     @overload
-    def fold_via(self, fn: FoldFunction[M, P, CarryT]) -> Callable[Concatenate[CarryT, P], CarryT]:
-        ...
+    def fold_via(self, fn: FoldFunction[M, P, CarryT]) -> Callable[Concatenate[CarryT, P], CarryT]: ...
 
     @overload
-    def fold_via(self, fn: Callable[[M, CarryT], CarryT]) -> Callable[[CarryT], CarryT]:
-        ...
+    def fold_via(self, fn: Callable[[M, CarryT], CarryT]) -> Callable[[CarryT], CarryT]: ...
 
     def fold_via(self, fn: Callable[..., CarryT]):
         """Return a function that folds over the sequence using ``fn``.
@@ -242,12 +248,14 @@ class BlockSeq(ModuleWithStateDictSerialization, Generic[M]):
         return do_fold
 
     @overload
-    def scan_via(self, fn: ScanFunction[M, CarryT, P, OutputT_co]) -> Callable[Concatenate[CarryT, P], tuple[CarryT, OutputT_co]]:
-        ...
+    def scan_via(
+        self, fn: ScanFunction[M, CarryT, P, OutputT_co]
+    ) -> Callable[Concatenate[CarryT, P], tuple[CarryT, OutputT_co]]: ...
 
     @overload
-    def scan_via(self, fn: Callable[[M, CarryT], tuple[CarryT, OutputT_co]]) -> Callable[[CarryT], tuple[CarryT, OutputT_co]]:
-        ...
+    def scan_via(
+        self, fn: Callable[[M, CarryT], tuple[CarryT, OutputT_co]]
+    ) -> Callable[[CarryT], tuple[CarryT, OutputT_co]]: ...
 
     def scan_via(self, fn: Callable[..., tuple[CarryT, OutputT_co]]):
         """Return a function that scans over the sequence using ``fn``.
@@ -271,12 +279,10 @@ class BlockSeq(ModuleWithStateDictSerialization, Generic[M]):
         return do_scan
 
     @overload
-    def vmap_via(self, fn: VmapFunction[M, P, OutputT_co]) -> Callable[P, OutputT_co]:
-        ...
+    def vmap_via(self, fn: VmapFunction[M, P, OutputT_co]) -> Callable[P, OutputT_co]: ...
 
     @overload
-    def vmap_via(self, fn: Callable[[M], OutputT_co]) -> Callable[[], OutputT_co]:
-        ...
+    def vmap_via(self, fn: Callable[[M], OutputT_co]) -> Callable[[], OutputT_co]: ...
 
     def vmap_via(self, fn: Callable[..., OutputT_co]) -> Callable[..., OutputT_co]:
         """Return a function that applies each block independently using ``fn``.
@@ -519,12 +525,10 @@ class Stacked(ModuleWithStateDictSerialization, Generic[M]):
         return do_fold(init, *args, **kwargs)
 
     @overload
-    def fold_via(self, fn: FoldFunction[M, P, CarryT]) -> Callable[Concatenate[CarryT, P], CarryT]:
-        ...
+    def fold_via(self, fn: FoldFunction[M, P, CarryT]) -> Callable[Concatenate[CarryT, P], CarryT]: ...
 
     @overload
-    def fold_via(self, fn: Callable[[M, CarryT], CarryT]) -> Callable[[CarryT], CarryT]:
-        ...
+    def fold_via(self, fn: Callable[[M, CarryT], CarryT]) -> Callable[[CarryT], CarryT]: ...
 
     def fold_via(self, fn: Callable[..., CarryT]):
         """Return a function that folds over the stack using ``fn``.
@@ -537,17 +541,21 @@ class Stacked(ModuleWithStateDictSerialization, Generic[M]):
             return fn(block, carry, *args, **kwargs)
 
         def do_fold(init: CarryT, *args, **kwargs) -> CarryT:
-            return haliax.fold(do_block, self.Block, remat=self.gradient_checkpointing)(init, self.stacked, *args, **kwargs)
+            return haliax.fold(do_block, self.Block, remat=self.gradient_checkpointing)(
+                init, self.stacked, *args, **kwargs
+            )
 
         return do_fold
 
     @overload
-    def scan_via(self, fn: ScanFunction[M, CarryT, P, OutputT_co]) -> Callable[Concatenate[CarryT, P], tuple[CarryT, OutputT_co]]:
-        ...
+    def scan_via(
+        self, fn: ScanFunction[M, CarryT, P, OutputT_co]
+    ) -> Callable[Concatenate[CarryT, P], tuple[CarryT, OutputT_co]]: ...
 
     @overload
-    def scan_via(self, fn: Callable[[M, CarryT], tuple[CarryT, OutputT_co]]) -> Callable[[CarryT], tuple[CarryT, OutputT_co]]:
-        ...
+    def scan_via(
+        self, fn: Callable[[M, CarryT], tuple[CarryT, OutputT_co]]
+    ) -> Callable[[CarryT], tuple[CarryT, OutputT_co]]: ...
 
     def scan_via(self, fn: Callable[..., tuple[CarryT, OutputT_co]]):
         """Return a function that scans over the stack using ``fn``.
@@ -560,19 +568,18 @@ class Stacked(ModuleWithStateDictSerialization, Generic[M]):
             carry, output = fn(block, carry, *args, **kwargs)
             return carry, output
 
-
         def do_scan(init: CarryT, *args, **kwargs) -> tuple[CarryT, OutputT_co]:
-            return haliax.scan(do_block, self.Block, remat=self.gradient_checkpointing)(init, self.stacked, *args, **kwargs)
+            return haliax.scan(do_block, self.Block, remat=self.gradient_checkpointing)(
+                init, self.stacked, *args, **kwargs
+            )
 
         return do_scan
 
     @overload
-    def vmap_via(self, fn: VmapFunction[M, P, OutputT_co]) -> Callable[P, OutputT_co]:
-        ...
+    def vmap_via(self, fn: VmapFunction[M, P, OutputT_co]) -> Callable[P, OutputT_co]: ...
 
     @overload
-    def vmap_via(self, fn: Callable[[M], OutputT_co]) -> Callable[[], OutputT_co]:
-        ...
+    def vmap_via(self, fn: Callable[[M], OutputT_co]) -> Callable[[], OutputT_co]: ...
 
     def vmap_via(self, fn: Callable[..., OutputT_co]) -> Callable[..., OutputT_co]:
         """Return a function that applies each block independently using ``fn``.

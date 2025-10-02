@@ -1,3 +1,8 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
 import dataclasses
 from types import EllipsisType
 from typing import Mapping, NoReturn, Optional, Sequence

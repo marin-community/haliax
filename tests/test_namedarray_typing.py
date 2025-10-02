@@ -1,3 +1,8 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
 from __future__ import annotations
 
 import typing
@@ -42,7 +47,7 @@ def test_namedarray_runtime_check():
     Embed = Axis("embed", 3)
     arr = NamedArray(jnp.zeros((Batch.size, Embed.size)), (Batch, Embed))
     assert arr.matches_axes(NamedArray["batch", "embed"])
-    assert arr.matches_axes(Named[NamedArray,"batch embed"])  # type: ignore
+    assert arr.matches_axes(Named[NamedArray, "batch embed"])  # type: ignore
     assert arr.matches_axes(NamedArray["batch embed ..."])
     assert arr.matches_axes(NamedArray[{"batch", "embed"}])
     assert arr.matches_axes(NamedArray[{"batch", "embed", ...}])
