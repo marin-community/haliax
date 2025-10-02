@@ -1,3 +1,7 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 import numpy as np
 import jax
 import jax.numpy as jnp
@@ -9,6 +13,7 @@ from haliax.partitioning import ResourceAxis, axis_mapping
 from test_utils import skip_if_not_enough_devices
 
 Dim = Axis("dim", 8)
+
 
 @skip_if_not_enough_devices(2)
 def test_shard_map_basic():

@@ -253,7 +253,7 @@ def _gmm(lhs, rhs, group_sizes, out_axes, sharded: bool = False, ar: bool = Fals
         return gmm_impl(lhs, rhs, group_sizes)
 
     mesh = jax.sharding.get_abstract_mesh()
-    shard_map_kwargs = {"check_rep": False}
+    shard_map_kwargs: dict = {"check_rep": False}
     if mesh is not None and not getattr(mesh, "empty", False):
         shard_map_kwargs["mesh"] = mesh
 

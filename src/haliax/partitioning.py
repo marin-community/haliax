@@ -10,7 +10,7 @@ import threading
 import typing
 import warnings
 from math import prod
-from typing import Callable, ContextManager, Mapping, Optional, ParamSpec, Sequence, TypeVar, Union, cast
+from typing import Any, Callable, ContextManager, Mapping, Optional, ParamSpec, Sequence, TypeVar, Union, cast
 
 import equinox as eqx
 import jax
@@ -747,6 +747,31 @@ def _get_mesh() -> Mesh | None:
     return mesh
 
 
+@typing.overload
+def shard_map(
+    f: Callable[Args, R],
+    *,
+    in_specs: Any = None,
+    out_specs: Any = None,
+    mesh: Mesh | None = None,
+    axis_mapping: ResourceMapping | None = None,
+    check_rep: bool = False,
+    **kwargs,
+) -> Callable[Args, R]: ...
+
+
+@typing.overload
+def shard_map(
+    *,
+    in_specs: Any = None,
+    out_specs: Any = None,
+    mesh: Mesh | None = None,
+    axis_mapping: ResourceMapping | None = None,
+    check_rep: bool = False,
+    **kwargs,
+) -> typing.Callable[[Callable[Args, R]], Callable[Args, R]]: ...
+
+
 def shard_map(
     f: Optional[Callable] = None,
     *,
@@ -823,9 +848,7 @@ def shard_map(
         return pspec_for_axis(axes, axis_mapping)
 
     def _leaf(x):
-        return isinstance(x, NamedArray) or (
-            isinstance(x, Sequence) and all(isinstance(ax, Axis) for ax in x)
-        )
+        return isinstance(x, NamedArray) or (isinstance(x, Sequence) and all(isinstance(ax, Axis) for ax in x))
 
     def _prepare(spec_tree):
         axes = jtu.tree_map(_axes, spec_tree, is_leaf=_leaf)
@@ -906,15 +929,15 @@ def shard_map(
             out_axes = jtu.tree_map(_axes, out_specs, is_leaf=_leaf)
             part_out_specs = jtu.tree_map(_pspec, out_specs, is_leaf=_leaf)
 
-        sm_fn = _cache(f, arg_axes=arg_axes, part_in_specs=part_in_specs, out_axes=out_axes, part_out_specs=part_out_specs)
+        sm_fn = _cache(
+            f, arg_axes=arg_axes, part_in_specs=part_in_specs, out_axes=out_axes, part_out_specs=part_out_specs
+        )
 
         out = sm_fn(*arrays)
         out_flat, out_tree = jtu.tree_flatten(out)
         ax_out_flat, _ = jtu.tree_flatten(out_axes, is_leaf=_leaf)
 
-        wrapped_out = [
-            _wrap_out(a, ax) for a, ax in zip(out_flat, ax_out_flat)
-        ]
+        wrapped_out = [_wrap_out(a, ax) for a, ax in zip(out_flat, ax_out_flat)]
         return jtu.tree_unflatten(out_tree, wrapped_out)
 
     return functools.update_wrapper(wrapper, f)
