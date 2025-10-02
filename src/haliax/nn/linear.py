@@ -252,12 +252,7 @@ def _gmm(lhs, rhs, group_sizes, out_axes, sharded: bool = False, ar: bool = Fals
     if sharded:
         return gmm_impl(lhs, rhs, group_sizes)
 
-    gmm_fn = shard_map(
-        gmm_impl,
-        in_specs=(lhs.axes, rhs.axes, group_sizes.axes),
-        out_specs=out_axes,
-        check_rep=False,
-    )
+    gmm_fn = shard_map(gmm_impl, check_rep=False)
     return gmm_fn(lhs, rhs, group_sizes)
 
 

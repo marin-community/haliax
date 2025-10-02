@@ -787,9 +787,14 @@ def shard_map(
     This function can be used either as ``haliax.shard_map(fn, ...)`` or as a
     decorator::
 
-        @haliax.shard_map(mesh=my_mesh)
+        @haliax.shard_map()
         def fn(x):
             ...
+
+    Note that, unlike the JAX version, you don't need to provide in_specs, out_specs, if all arguments and return value
+    are ``NamedArray`` objects. Mesh can be inferred from the context mesh (which JAX could do, but doesn't).
+    Axis mapping can be inferred from the context axis mapping.
+
 
     Args:
         f: The function to apply with ``shard_map``.
