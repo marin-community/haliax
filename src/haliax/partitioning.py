@@ -10,7 +10,7 @@ import threading
 import typing
 import warnings
 from math import prod
-from typing import Callable, ContextManager, Mapping, ParamSpec, Sequence, TypeAlias, TypeVar, cast
+from typing import Callable, ContextManager, Mapping, Optional, ParamSpec, Sequence, TypeAlias, TypeVar, cast
 
 import equinox as eqx
 import jax
@@ -136,7 +136,7 @@ def mesh_context(mesh: MeshLike) -> ContextManager[None]:
     set_mesh_fn = getattr(jax, "set_mesh", None)
     use_mesh_fn = getattr(jax.sharding, "use_mesh", None)
 
-    manager_factory: Callable[[MeshLike], ContextManager[None]] | None = None
+    manager_factory: Optional[Callable[[MeshLike], ContextManager[None]]] = None
     if set_mesh_fn is not None:
         manager_factory = cast(Callable[[MeshLike], ContextManager[None]], set_mesh_fn)
     elif use_mesh_fn is not None:
@@ -157,7 +157,7 @@ def set_mesh(mesh: MeshLike) -> ContextManager[None]:
     return mesh_context(mesh)
 
 
-def auto_sharded(x: T, mesh: Mesh | None = None) -> T:
+def auto_sharded(x: T, mesh: Optional[Mesh] = None) -> T:
     """
     Shard a PyTree using the global axis mapping. NamedArrays in the PyTree are sharded using the axis mapping
      and the names in the tree.

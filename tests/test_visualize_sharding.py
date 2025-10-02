@@ -50,7 +50,6 @@ def test_visualize_shardings_inside_jit(capsys):
     with axis_mapping({"dim1": ResourceAxis.DATA}), mesh:
         x = hax.ones({"dim1": 8 * len(jax.devices())})
         x = hax.shard(x)
-        x = hax.shard(x)
         fn(x)
 
     out = capsys.readouterr().out
