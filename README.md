@@ -120,6 +120,14 @@ These are some tutorials to get you started with Haliax. They are available as C
 * [Mixed Precision with `jmp`](https://colab.research.google.com/drive/1_4cikwt-UhSH7yRzNRK8ze9msM9r2mEl?usp=sharing) (This one is really a tutorial for [jmp](https://github.com/deepmind/jmp) but it's how to use it with Haliax...)
 
 <!--haliax-tutorials-end-->
+
+### Examples
+
+These example notebooks illustrate small self-contained uses of Haliax.
+
+<!--haliax-examples-start-->
+* [MNIST classification with synthetic data](https://github.com/stanford-crfm/haliax/blob/main/docs/mnist_example.ipynb)
+<!--haliax-examples-end-->
 ### API Reference
 
 Haliax's API documentation is available at [haliax.readthedocs.io](https://haliax.readthedocs.io/en/latest/).
