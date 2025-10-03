@@ -31,10 +31,7 @@ import haliax
 import jax.random as jrandom
 
 # Create a module
-Heads = haliax.Axis("Heads", 8)
-Dim = haliax.Axis("Dim", 16)
-Out = haliax.Axis("Out", 5)
-module = haliax.nn.Linear.init(In=(Heads, Dim), Out=Out, key=jrandom.PRNGKey(0))
+module = haliax.nn.Linear.init(In={"Heads": 8, "Dim": 16}, Out={"Out": 5}, key=jrandom.PRNGKey(0))
 
 # Serialize the module to a state dict
 state_dict = haliax.state_dict.to_torch_compatible_state_dict(module)
@@ -68,10 +65,7 @@ import haliax as hax
 import jax.random as jrandom
 
 # Create a module
-Heads = hax.Axis("Heads", 8)
-Dim = hax.Axis("Dim", 16)
-Out = hax.Axis("Out", 5)
-module = hax.nn.Linear.init(In=(Heads, Dim), Out=Out, key=jrandom.PRNGKey(0))
+module = hax.nn.Linear.init(In={"Heads": 8, "Dim": 16}, Out={"Out": 5}, key=jrandom.PRNGKey(0))
 
 # Load the state dict from a file
 state_dict = hax.state_dict.load_state_dict('state_dict.safetensors')

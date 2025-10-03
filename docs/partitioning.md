@@ -65,17 +65,13 @@ routines to handle mapping of [haliax.NamedArray][]s automatically.
 ```python
 import haliax as hax
 
-Batch = hax.Axis("batch", 32)
-SeqLen = hax.Axis("seqlen", 512)
+axis_mapping = {"batch": "data"}
 
-axis_mapping = {"batch": "data", }
-
-batch = hax.zeros((Batch, SeqLen), dtype=jnp.float32)
+batch = hax.zeros({"batch": 32, "seqlen": 512}, dtype=jnp.float32)
 batch = hax.shard(batch, axis_mapping)
-
 # we also have "auto_sharded" and support context mappings for axis mappings:
 with hax.axis_mapping({"batch": "data"}):
-    batch = hax.zeros((Batch, SeqLen), dtype=jnp.float32)
+    batch = hax.zeros({"batch": 32, "seqlen": 512}, dtype=jnp.float32)
     batch = hax.shard(batch)
 ```
 

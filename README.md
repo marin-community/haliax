@@ -41,52 +41,73 @@ import jax.numpy as jnp
 import haliax as hax
 import haliax.nn as hnn
 
-Pos = hax.Axis("position", 1024)  # sequence length
-KPos = Pos.alias("key_position")
-Head = hax.Axis("head", 8)  # number of attention heads
-Key = hax.Axis("key", 64)  # key size
-Embed = hax.Axis("embed", 512)  # embedding size
+shape = {
+    "position": 1024,
+    "key_position": 1024,
+    "head": 8,
+    "key": 64,
+    "embed": 512,
+}
 
-# alternatively:
-#Pos, KPos, Head, Key, Embed = hax.make_axes(pos=1024, key_pos=1024, head=8, key=64, embed=512)
+# alternatively, create Axis objects explicitly
+# Pos, KPos, Head, Key, Embed = hax.make_axes(**shape)
 
 
-def attention_scores(Key, KPos, query, key, mask):
+def attention_scores(query, key, mask):
     # how similar is each query to each key
-    scores = hax.dot(query, key, axis=Key) / jnp.sqrt(Key.size)
+    scores = hax.dot(query, key, axis="key") / jnp.sqrt(shape["key"])
 
     if mask is not None:
         scores -= 1E9 * (1.0 - mask)
 
     # convert to probabilities
-    scores = haliax.nn.softmax(scores, KPos)
+    scores = hnn.softmax(scores, "key_position")
     return scores
 
 
-def attention(Key, KPos, query, key, value, mask):
-    scores = attention_scores(Key, KPos, query, key, mask)
-    answers = hax.dot(scores, value, axis=KPos)
+def attention(query, key, value, mask):
+    scores = attention_scores(query, key, mask)
+    answers = hax.dot(scores, value, axis="key_position")
 
     return answers
 
 
 # Causal Mask means that if pos >= key_pos, then pos can attend to key_pos
-causal_mask = hax.arange(Pos).broadcast_axis(KPos) >= hax.arange(KPos)
+causal_mask = (
+    hax.arange({"position": shape["position"]}).broadcast_axis("key_position")
+    >= hax.arange({"key_position": shape["key_position"]})
+)
 
 
 class Attention(eqx.Module):
-    proj_q: hnn.Linear  # [Embed] -> [Head, Key]
-    proj_k: hnn.Linear  # [Embed] -> [Head, Key]
-    proj_v: hnn.Linear  # [Embed] -> [Head, Key]
-    proj_answer: hnn.Linear  # output projection from [Head, Key] -> [Embed]
+    proj_q: hnn.Linear  # [embed] -> [head, key]
+    proj_k: hnn.Linear  # [embed] -> [head, key]
+    proj_v: hnn.Linear  # [embed] -> [head, key]
+    proj_answer: hnn.Linear  # [head, key] -> [embed]
 
     @staticmethod
-    def init(Embed, Head, Key, *, key):
+    def init(shape, *, key):
         k_q, k_k, k_v, k_ans = jax.random.split(key, 4)
-        proj_q = hnn.Linear.init(In=Embed, Out=(Head, Key), key=k_q)
-        proj_k = hnn.Linear.init(In=Embed, Out=(Head, Key), key=k_k)
-        proj_v = hnn.Linear.init(In=Embed, Out=(Head, Key), key=k_v)
-        proj_answer = hnn.Linear.init(In=(Head, Key), Out=Embed, key=k_ans)
+        proj_q = hnn.Linear.init(
+            In={"embed": shape["embed"]},
+            Out={"head": shape["head"], "key": shape["key"]},
+            key=k_q,
+        )
+        proj_k = hnn.Linear.init(
+            In={"embed": shape["embed"]},
+            Out={"head": shape["head"], "key": shape["key"]},
+            key=k_k,
+        )
+        proj_v = hnn.Linear.init(
+            In={"embed": shape["embed"]},
+            Out={"head": shape["head"], "key": shape["key"]},
+            key=k_v,
+        )
+        proj_answer = hnn.Linear.init(
+            In={"head": shape["head"], "key": shape["key"]},
+            Out={"embed": shape["embed"]},
+            key=k_ans,
+        )
         return Attention(proj_q, proj_k, proj_v, proj_answer)
 
     def __call__(self, x, mask=None):
@@ -95,7 +116,7 @@ class Attention(eqx.Module):
         k = self.proj_k(x).rename({"position": "key_position"})
         v = self.proj_v(x).rename({"position": "key_position"})
 
-        answers = attention(Key, KPos, q, k, v, causal_mask)
+        answers = attention(q, k, v, causal_mask)
 
         x = self.proj_answer(answers)
         return x

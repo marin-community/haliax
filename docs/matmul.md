@@ -19,13 +19,9 @@ axes you want to keep (though you can if you want):
 ```python
 import haliax as hax
 
-H = hax.Axis("H", 3)
-W = hax.Axis("W", 4)
-D = hax.Axis("D", 5)
-
-x = hax.ones((H, W, D))
-w = hax.ones((D,))
-y = hax.dot(x, w, axis=D)  # shape is (H, W), equivalent to np.einsum("hwd,d->hw", x, w)
+x = hax.ones({"H": 3, "W": 4, "D": 5})
+w = hax.ones({"D": 5})
+y = hax.dot(x, w, axis="D")  # shape is (H, W), equivalent to np.einsum("hwd,d->hw", x, w)
 ```
 
 [haliax.dot][] is at its best when you want to express a simple matrix multiplication over one or a few axes.
@@ -37,24 +33,19 @@ that gives a few examples. Here are several more:
 ```python
 import haliax as hax
 
-H = hax.Axis("H", 3)
-W = hax.Axis("W", 4)
-D = hax.Axis("D", 5)
-C = hax.Axis("C", 6)
+x = hax.arange({"H": 3, "W": 4, "D": 5, "C": 6})
+w = hax.arange({"D": 5, "C": 6})
+c = hax.arange({"C": 6})
 
-x = hax.arange((H, W, D, C))
-w = hax.arange((D, C))
-c = hax.arange((C,))
+y = hax.dot(x, c, axis="C") # shape is (H, W, D), equivalent to jnp.dot(x, c)
 
-y = hax.dot(x, c, axis=C) # shape is (H, W, D), equivalent to jnp.dot(x, c)
-
-y = hax.dot(x, w, axis=(D, C))  # shape is (H, W), equivalent to np.einsum("...dc,dc->...", x, w)
-y = hax.dot(x, w, axis=(D, C), out_axes=(W, H)) # shape is (W, H) instead of (H, W)
-y = hax.dot(x, w, c, axis=(D, C)) # shape is (H, W), equivalent to np.einsum("...dc,dc,c->...", x, w, c)
-y = hax.dot(x, c, axis=(H, D, C)) # shape is (W,), equivalent to np.einsum("hwdc,c->w", x, c)
-s = hax.dot(x, w, axis=None)  # scalar output, equivalent to np.einsum("hwdc,dc->", x, w)
+y = hax.dot(x, w, axis=("D", "C"))  # shape is (H, W), equivalent to np.einsum("...dc,dc->...", x, w)
+y = hax.dot(x, w, axis=("D", "C"), out_axes=("W", "H")) # shape is (W, H) instead of (H, W)
+y = hax.dot(x, w, c, axis=("D", "C")) # shape is (H, W), equivalent to np.einsum("...dc,dc,c->...", x, w, c)
+y = hax.dot(x, c, axis=("H", "D", "C")) # shape is (W,), equivalent to np.einsum("hwdc,c->w", x, c)
+y = hax.dot(x, w, axis=None)  # scalar output, equivalent to np.einsum("hwdc,dc->", x, w)
 y = hax.dot(x, w, c, axis=())  # shape is (H, W, D, C), equivalent to np.einsum("hwdc,dc,c->hwdc", x, w, c)
-y = hax.dot(x, w, c, axis=(), out_axes=(D, ..., H))  # shape is (D, W, C, H), equivalent to np.einsum("hwdc,dc,c->dwch", x, w, c)
+y = hax.dot(x, w, c, axis=(), out_axes=("D", ..., "H"))  # shape is (D, W, C, H), equivalent to np.einsum("hwdc,dc,c->dwch", x, w, c)
 ```
 
 ### [`haliax.einsum`][haliax.einsum]
@@ -84,12 +75,8 @@ match the names of the axes in the input arrays, but the order of the axes must 
 ```python
 import haliax as hax
 
-H = hax.Axis("H", 3)
-W = hax.Axis("W", 4)
-D = hax.Axis("D", 5)
-
-x = hax.ones((H, W, D))
-w = hax.ones((D,))
+x = hax.ones({"H": 3, "W": 4, "D": 5})
+w = hax.ones({"D": 5})
 y = hax.einsum("h w d, d -> h w", x, w)  # shape is (H, W), equivalent to jnp.einsum("hwd,d->hw", x, w)
 y = hax.einsum("... d, d -> ...", x, w)  # same as above
 ```
@@ -109,12 +96,8 @@ on the left hand side of the `->` in the `einsum` string. Axes not specified are
 ```python
 import haliax as hax
 
-H = hax.Axis("H", 3)
-W = hax.Axis("W", 4)
-D = hax.Axis("D", 5)
-
-x = hax.ones((H, W, D))
-w = hax.ones((D,))
+x = hax.ones({"H": 3, "W": 4, "D": 5})
+w = hax.ones({"D": 5})
 
 y = hax.einsum("{H W D} -> H W", x)  # shape is (H, W)
 y = hax.einsum("{D} -> ", w)  # shape is (H, W)
@@ -129,15 +112,11 @@ You can also use axis aliases in the `einsum` string, which can be useful for ex
 in library code or just for shortening the string:
 
 ```python
-Height = hax.Axis("Height", 3)
-Width = hax.Axis("Width", 4)
-Depth = hax.Axis("Depth", 5)
+x = hax.ones({"Height": 3, "Width": 4, "Depth": 5})
+w = hax.ones({"Depth": 5})
 
-x = hax.ones((Height, Width, Depth))
-w = hax.ones((Depth,))
-
-y = hax.einsum("{H W D} -> H W", x, H=Height, W=Width, D=Depth)  # shape is (Height, Width)
-y = hax.einsum("{D} -> ", w, D=Depth)  # shape is (Height, Width)
+y = hax.einsum("{H W D} -> H W", x, H="Height", W="Width", D="Depth")  # shape is (Height, Width)
+y = hax.einsum("{D} -> ", w, D="Depth")  # shape is (Height, Width)
 ```
 
 
@@ -151,12 +130,8 @@ certain contractions concisely.
 ```python
 import haliax as hax
 
-H = hax.Axis("H", 3)
-W = hax.Axis("W", 4)
-D = hax.Axis("D", 5)
-
-x = hax.ones((H, W, D))
-w = hax.ones((D,))
+x = hax.ones({"H": 3, "W": 4, "D": 5})
+w = hax.ones({"D": 5})
 
 y = hax.einsum("-> H W", x)  # shape is (H, W)
 y = hax.einsum("-> D", w)  # shape is (D,)
@@ -168,12 +143,8 @@ or you are sure you don't want to let users implicitly batch over any axes.
 Output axes mode also supports axis aliases:
 
 ```python
-Height = hax.Axis("Height", 3)
-Width = hax.Axis("Width", 4)
-Depth = hax.Axis("Depth", 5)
-
-x = hax.ones((Height, Width, Depth))
-w = hax.ones((Depth,))
-y = hax.einsum("-> Height Width", x, Height=Height, Width=Width, Depth=Depth)  # shape is (Height, Width)
-y = hax.einsum("-> Depth", w, Depth=Depth)  # shape is (Depth,)
+x = hax.ones({"Height": 3, "Width": 4, "Depth": 5})
+w = hax.ones({"Depth": 5})
+y = hax.einsum("-> Height Width", x, Height="Height", Width="Width", Depth="Depth")  # shape is (Height, Width)
+y = hax.einsum("-> Depth", w, Depth="Depth")  # shape is (Depth,)
 ```
