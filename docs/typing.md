@@ -27,9 +27,9 @@ if not arr.matches_axes(Float[NamedArray, "batch embed ..."]):
 ## DType-aware annotations
 
 Sometimes it is useful to express both the axes **and** the dtype in the type
-annotation.  The :mod:`haliax.typing` module defines symbolic types for all of
+annotation.  The :mod:`haliax.haxtyping` module defines symbolic types for all of
 JAX's common dtypes that can be indexed just like ``Named``.  In documentation
-examples we'll use ``import haliax.typing as ht``:
+examples we'll use ``import haliax.haxtyping as ht``:
 
 ```python
 import haliax.haxtyping as ht
@@ -98,3 +98,25 @@ Then suppress F722 in your linter to suppress that error.
 
 See the [jaxtyping documentation](https://docs.kidger.site/jaxtyping/faq/#flake8-or-ruff-are-throwing-an-error) for more
 details on the workaround.
+
+## Generic axes
+
+Sometimes the exact name of an axis is not known ahead of time but you want to
+enforce that multiple arguments share the same axis. Capitalized names in a type
+annotation act as generic axes that will be resolved at runtime:
+
+```python
+import haliax as hax
+import haliax.haxtyping as ht
+
+def foo(a: ht.f32[{"B", "embed"}], x: ht.i32[{"pos", "B"}]):
+    resolved = hax.check_axes(a=a, x=x)
+    assert resolved["B"] == hax.Axis("batch", 12)
+
+a = hax.zeros({"batch": 12, "embed": 4})
+x = hax.zeros({"pos": 4, "batch": 12}, dtype=jnp.int32)
+foo(a, x)
+```
+
+`check_axes` jointly resolves all generic axes and raises if they cannot be
+matched to the same underlying axis name and size across arguments.

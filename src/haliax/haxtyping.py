@@ -44,15 +44,21 @@ if TYPE_CHECKING:
 
     # axes‑only helper
     from typing import Annotated as Named
+    from .core import Axis, NamedArray
+
+    def check_axes(**arrays: NamedArray) -> dict[str, Axis]: ...
 
 else:
     # ── RUNTIME: custom wrappers for NamedArray, plus delegation to jaxtyping ──
     import jaxtyping as jt
     import jax.numpy as jnp
     from typing import Annotated
+    import inspect
+    import typing
     from dataclasses import dataclass, replace
 
     from .core import (
+        Axis,
         NamedArray,
         NamedArrayAxes,
         NamedArrayAxesSpec,
@@ -162,3 +168,84 @@ else:
         "complex64",
         "complex128",
     ]
+
+    GenericName = str  # capitalized axis name used for generics
+
+    def _is_generic(name: str) -> bool:
+        return bool(name and name[0].isupper())
+
+    def _resolve_unordered(
+        arr: NamedArray, spec: NamedArrayAxesSpec, generics: dict[GenericName, Axis]
+    ) -> None:
+        axes = _parse_namedarray_axes(spec)
+        remaining = {ax.name: ax for ax in arr.axes}
+
+        # match explicit axis names first
+        for name in axes.before:
+            if _is_generic(name):
+                continue
+            if name not in remaining:
+                raise ValueError(f"Axis {name} not found in {arr.axes}")
+            remaining.pop(name)
+
+        # assign generics
+        leftover = sorted(remaining.items())
+        for name in axes.before:
+            if not _is_generic(name):
+                continue
+            if name in generics:
+                expected = generics[name]
+                if expected.name not in remaining:
+                    raise ValueError(
+                        f"Generic axis {name} expected {expected.name} but not present"
+                    )
+                ax = remaining.pop(expected.name)
+                if ax.size != expected.size:
+                    raise ValueError(
+                        f"Generic axis {name} size mismatch: {ax.size} vs {expected.size}"
+                    )
+            else:
+                if not leftover:
+                    raise ValueError(f"Not enough axes to resolve generic {name}")
+                ax_name, ax = leftover.pop(0)
+                remaining.pop(ax_name, None)
+                generics[name] = ax
+
+        if not axes.subset and remaining:
+            raise ValueError(f"Unexpected axes {list(remaining)} for spec {spec}")
+
+
+    def check_axes(**arrays: NamedArray) -> dict[str, Axis]:
+        """Validate NamedArray arguments against their type annotations and resolve generic axes."""
+
+        frame = inspect.currentframe()
+        assert frame is not None
+        caller = frame.f_back
+        if caller is None:
+            raise RuntimeError("check_axes must be called from within a function")
+
+        fn = None
+        for obj in caller.f_globals.values():
+            if inspect.isfunction(obj) and obj.__code__ is caller.f_code:
+                fn = obj
+                break
+        if fn is None:
+            raise RuntimeError("Unable to locate calling function")
+
+        hints = typing.get_type_hints(fn, include_extras=True)
+        generics: dict[str, Axis] = {}
+
+        for name, arr in arrays.items():
+            spec = hints.get(name)
+            if spec is None:
+                continue
+            ann = _parse_namedarray_axes(spec)
+            if ann.ordered:
+                if not arr.matches_axes(ann):
+                    raise ValueError(f"Array {name} does not match annotation {ann}")
+            else:
+                _resolve_unordered(arr, spec, generics)
+
+        return generics
+
+    __all__.append("check_axes")

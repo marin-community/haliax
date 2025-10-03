@@ -67,7 +67,7 @@ from .core import (
     unflatten_axis,
     updated_slice,
 )
-from .haxtyping import Named
+from .haxtyping import Named, check_axes
 from .hof import fold, map, scan, vmap
 from .jax_utils import tree_checkpoint_name
 from .ops import (
@@ -1346,6 +1346,7 @@ __all__ = [
     "unflatten_axis",
     "ReductionFunction",
     "SimpleReductionFunction",
+    "check_axes",
     "NamedArrayAxes",
     "NamedArrayAxesSpec",
     "Named",
