@@ -118,6 +118,7 @@ These are some tutorials to get you started with Haliax. They are available as C
 * [Distributed Training in Haliax](https://colab.research.google.com/drive/1QX4yH3zRFF3Xiibf1aahETcSQ5nbcUMz) (including FSDP)
 * [Tensor Parallelism in Haliax](https://colab.research.google.com/drive/18_BrtDpe1lu89M4T6fKzda8DdSLtFJhi)
 * [Mixed Precision with `jmp`](https://colab.research.google.com/drive/1_4cikwt-UhSH7yRzNRK8ze9msM9r2mEl?usp=sharing) (This one is really a tutorial for [jmp](https://github.com/deepmind/jmp) but it's how to use it with Haliax...)
+* [Simple CNN on MNIST](https://colab.research.google.com/github/stanford-crfm/haliax/blob/main/docs/examples/haliax_cnn_example.ipynb) - A beginner-friendly example of a Convolutional Neural Network.
 
 <!--haliax-tutorials-end-->
 ### API Reference
