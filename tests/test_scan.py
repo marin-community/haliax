@@ -239,8 +239,18 @@ E = hax.Axis("E", 10)
             [(E.size,), (Block.size, E.size), (Block.size, E.size)],
             None,
         ),
-        ("simple", ScanCheckpointPolicy(simple=True), [(E.size,), (Block.size, E.size)], None),
-        ("nested", ScanCheckpointPolicy(simple=True, nested=2), [(E.size,), (2, E.size)], None),
+        (
+            "simple",
+            ScanCheckpointPolicy(simple=True),
+            [(E.size,), (Block.size, E.size)],
+            None,
+        ),
+        (
+            "nested",
+            ScanCheckpointPolicy(simple=True, nested=2),
+            [(E.size,), (2, E.size)],
+            None,
+        ),
         (
             "sin_offload",
             ScanCheckpointPolicy(save_carries=True, offload_block_internals=["sin"]),
@@ -369,6 +379,42 @@ def test_scan_via():
 
     assert hax.all(hax.isclose(carry, expected_carry))
     assert hax.all(hax.isclose(outs, expected_outs))
+
+
+def test_scan_via_with_unroll():
+    class Module(eqx.Module):
+        w: hax.NamedArray
+
+        def with_output(self, x):
+            out = x + self.w
+            return out, 2 * self.w
+
+        def __call__(self, carry):
+            return carry + self.w, 2 * self.w
+
+        @staticmethod
+        def init(named):
+            return Module(w=named)
+
+    Block = hax.Axis("block", 4)
+    E = hax.Axis("E", 6)
+
+    named = hax.random.uniform(jax.random.PRNGKey(0), (Block, E))
+    m = Stacked.init(Block, Module)(named=named)
+
+    x = hax.random.uniform(jax.random.PRNGKey(1), (E,))
+
+    default_carry, default_outs = m.scan_via(Module.with_output)(x)
+    carry, outs = m.scan_via(Module.with_output, unroll=2)(x)
+
+    assert hax.all(hax.isclose(carry, default_carry))
+    assert hax.all(hax.isclose(outs, default_outs))
+
+    default_carry_direct, default_outs_direct = m.scan(x)
+    carry_direct, outs_direct = m.scan(x, unroll=2)
+
+    assert hax.all(hax.isclose(carry_direct, default_carry_direct))
+    assert hax.all(hax.isclose(outs_direct, default_outs_direct))
 
 
 def test_scan_via_multi_args():
@@ -511,6 +557,39 @@ def test_fold_via_multi_args():
         expected = expected + 2 * named["block", i] + y + z
 
     assert hax.all(hax.isclose(result, expected))
+
+
+def test_fold_via_with_unroll():
+    class Module(eqx.Module):
+        w: hax.NamedArray
+
+        def intermediate(self, x):
+            return x + 2 * self.w
+
+        def __call__(self, carry):
+            return carry + self.w
+
+        @staticmethod
+        def init(named):
+            return Module(w=named)
+
+    Block = hax.Axis("block", 3)
+    E = hax.Axis("E", 5)
+
+    named = hax.random.uniform(jax.random.PRNGKey(0), (Block, E))
+    m = Stacked.init(Block, Module)(named=named)
+
+    x = hax.random.uniform(jax.random.PRNGKey(1), (E,))
+
+    default_result = m.fold_via(Module.intermediate)(x)
+    result_unroll = m.fold_via(Module.intermediate, unroll=2)(x)
+
+    assert hax.all(hax.isclose(result_unroll, default_result))
+
+    default_fold = m.fold(x)
+    fold_unroll = m.fold(x, unroll=2)
+
+    assert hax.all(hax.isclose(fold_unroll, default_fold))
 
 
 def test_fold_via_static_args():
