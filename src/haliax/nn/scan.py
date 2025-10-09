@@ -62,6 +62,22 @@ class ModuleInit(Protocol[M_co]):
     def __call__(self, *args, **kwargs) -> M_co: ...
 
 
+def _normalize_unroll(unroll: int | bool | None, block_size: int) -> int:
+    """Convert user-provided ``unroll`` values into an integer understood by ``jax.lax.scan``."""
+
+    if unroll is None:
+        return 1
+
+    if isinstance(unroll, bool):
+        return block_size if unroll else 1
+
+    resolved = int(unroll)
+    if resolved < 1:
+        raise ValueError(f"unroll must be >= 1; got {resolved}.")
+
+    return resolved
+
+
 class BlockFoldable(Protocol[M]):
     """Common interface for :class:`~haliax.nn.Stacked` and :class:`~haliax.nn.BlockSeq`.
 
@@ -84,27 +100,27 @@ class BlockFoldable(Protocol[M]):
         prevent_cse: bool = False,
     ) -> ModuleInit[S]: ...
 
-    def scan(self, init: T, *extra_args, unroll: int | None = None, **extra_kwargs): ...
+    def scan(self, init: T, *extra_args, unroll: int | bool | None = None, **extra_kwargs): ...
 
-    def fold(self, init: T, *args, unroll: int | None = None, **kwargs) -> T: ...
+    def fold(self, init: T, *args, unroll: int | bool | None = None, **kwargs) -> T: ...
 
     @overload
     def fold_via(
-        self, fn: FoldFunction[M, P, CarryT], *, unroll: int | None = None
+        self, fn: FoldFunction[M, P, CarryT], *, unroll: int | bool | None = None
     ) -> Callable[Concatenate[CarryT, P], CarryT]: ...
 
     @overload
     def fold_via(
-        self, fn: Callable[[M, CarryT], CarryT], *, unroll: int | None = None
+        self, fn: Callable[[M, CarryT], CarryT], *, unroll: int | bool | None = None
     ) -> Callable[[CarryT], CarryT]: ...
 
     def fold_via(
-        self, fn: Callable[..., CarryT], *, unroll: int | None = None
+        self, fn: Callable[..., CarryT], *, unroll: int | bool | None = None
     ) -> Callable[Concatenate[CarryT, P], CarryT]: ...
 
     @overload
     def scan_via(
-        self, fn: ScanFunction[M, CarryT, P, OutputT_co], *, unroll: int | None = None
+        self, fn: ScanFunction[M, CarryT, P, OutputT_co], *, unroll: int | bool | None = None
     ) -> Callable[Concatenate[CarryT, P], tuple[CarryT, OutputT_co]]: ...
 
     @overload
@@ -112,11 +128,11 @@ class BlockFoldable(Protocol[M]):
         self,
         fn: Callable[[M, CarryT], tuple[CarryT, OutputT_co]],
         *,
-        unroll: int | None = None,
+        unroll: int | bool | None = None,
     ) -> Callable[[CarryT], tuple[CarryT, OutputT_co]]: ...
 
     def scan_via(
-        self, fn: Callable[..., tuple[CarryT, OutputT_co]], *, unroll: int | None = None
+        self, fn: Callable[..., tuple[CarryT, OutputT_co]], *, unroll: int | bool | None = None
     ) -> Callable[P, tuple[CarryT, OutputT_co]]: ...
 
     @overload
@@ -192,14 +208,8 @@ class BlockSeq(ModuleWithStateDictSerialization, Generic[M]):
 
         return fn
 
-    def scan(self, init: T, *extra_args, unroll: int | None = None, **extra_kwargs):
+    def scan(self, init: T, *extra_args, unroll: int | bool | None = None, **extra_kwargs):
         def do_scan(init, *extra_args, **extra_kwargs):
-            if unroll not in (None, 1):
-                warnings.warn(
-                    "BlockSeq.scan ignores the `unroll` argument; consider using `Stacked` for JAX-compatible scans.",
-                    stacklevel=2,
-                )
-
             out = []
             carry = init
 
@@ -227,14 +237,8 @@ class BlockSeq(ModuleWithStateDictSerialization, Generic[M]):
 
         return do_scan(init, *extra_args, **extra_kwargs)
 
-    def fold(self, init: T, *args, unroll: int | None = None, **kwargs) -> T:
+    def fold(self, init: T, *args, unroll: int | bool | None = None, **kwargs) -> T:
         def do_fold(init, *args, **kwargs):
-            if unroll not in (None, 1):
-                warnings.warn(
-                    "BlockSeq.fold ignores the `unroll` argument; consider using `Stacked` for JAX-compatible folds.",
-                    stacklevel=2,
-                )
-
             carry = init
             for i, block in enumerate(self.blocks):
                 (block_args, block_kwargs) = haliax.tree_util.tree_map(
@@ -249,15 +253,15 @@ class BlockSeq(ModuleWithStateDictSerialization, Generic[M]):
 
     @overload
     def fold_via(
-        self, fn: FoldFunction[M, P, CarryT], *, unroll: int | None = None
+        self, fn: FoldFunction[M, P, CarryT], *, unroll: int | bool | None = None
     ) -> Callable[Concatenate[CarryT, P], CarryT]: ...
 
     @overload
     def fold_via(
-        self, fn: Callable[[M, CarryT], CarryT], *, unroll: int | None = None
+        self, fn: Callable[[M, CarryT], CarryT], *, unroll: int | bool | None = None
     ) -> Callable[[CarryT], CarryT]: ...
 
-    def fold_via(self, fn: Callable[..., CarryT], *, unroll: int | None = None):
+    def fold_via(self, fn: Callable[..., CarryT], *, unroll: int | bool | None = None):
         """Return a function that folds over the sequence using ``fn``.
 
         ``fn`` should take a block and a carry and return a new carry. The
@@ -265,12 +269,6 @@ class BlockSeq(ModuleWithStateDictSerialization, Generic[M]):
         """
 
         def do_fold(init: CarryT, *args, **kwargs) -> CarryT:
-            if unroll not in (None, 1):
-                warnings.warn(
-                    "BlockSeq.fold_via ignores the `unroll` argument; consider using `Stacked`.",
-                    stacklevel=2,
-                )
-
             carry = init
             for block in self.blocks:
                 carry = fn(block, carry, *args, **kwargs)
@@ -281,7 +279,7 @@ class BlockSeq(ModuleWithStateDictSerialization, Generic[M]):
 
     @overload
     def scan_via(
-        self, fn: ScanFunction[M, CarryT, P, OutputT_co], *, unroll: int | None = None
+        self, fn: ScanFunction[M, CarryT, P, OutputT_co], *, unroll: int | bool | None = None
     ) -> Callable[Concatenate[CarryT, P], tuple[CarryT, OutputT_co]]: ...
 
     @overload
@@ -289,10 +287,10 @@ class BlockSeq(ModuleWithStateDictSerialization, Generic[M]):
         self,
         fn: Callable[[M, CarryT], tuple[CarryT, OutputT_co]],
         *,
-        unroll: int | None = None,
+        unroll: int | bool | None = None,
     ) -> Callable[[CarryT], tuple[CarryT, OutputT_co]]: ...
 
-    def scan_via(self, fn: Callable[..., tuple[CarryT, OutputT_co]], *, unroll: int | None = None):
+    def scan_via(self, fn: Callable[..., tuple[CarryT, OutputT_co]], *, unroll: int | bool | None = None):
         """Return a function that scans over the sequence using ``fn``.
 
         ``fn`` should take a block and a carry and return ``(carry, output)``.
@@ -300,12 +298,6 @@ class BlockSeq(ModuleWithStateDictSerialization, Generic[M]):
         """
 
         def do_scan(init: CarryT, *args, **kwargs) -> tuple[CarryT, OutputT_co]:
-            if unroll not in (None, 1):
-                warnings.warn(
-                    "BlockSeq.scan_via ignores the `unroll` argument; consider using `Stacked`.",
-                    stacklevel=2,
-                )
-
             out = []
             carry = init
             for block in self.blocks:
@@ -490,7 +482,7 @@ class Stacked(ModuleWithStateDictSerialization, Generic[M]):
 
         return fn
 
-    def scan(self, init, *extra_args, unroll: int | None = None, **extra_kwargs):
+    def scan(self, init, *extra_args, unroll: int | bool | None = None, **extra_kwargs):
         """
         Scan over the stacked module. This is the same as a for loop that applies each instance of the module in sequence
         to the input, passing the output of one instance to the next instance. It returns a stack of outputs as
@@ -518,7 +510,7 @@ class Stacked(ModuleWithStateDictSerialization, Generic[M]):
 
         """
 
-        resolved_unroll = 1 if unroll is None else int(unroll)
+        resolved_unroll = _normalize_unroll(unroll, self.Block.size)
 
         def do_block(carry, block, *args, **kwargs):
             carry, out = block(carry, *args, **kwargs)
@@ -535,7 +527,7 @@ class Stacked(ModuleWithStateDictSerialization, Generic[M]):
 
         return do_scan(init, *extra_args, **extra_kwargs)
 
-    def fold(self, init, *args, unroll: int | None = None, **kwargs):
+    def fold(self, init, *args, unroll: int | bool | None = None, **kwargs):
         """
         Fold over the stacked module. This is the same as a for loop that applies each instance of the module in sequence
         to the input, passing the output of one instance to the next instance.
@@ -558,7 +550,7 @@ class Stacked(ModuleWithStateDictSerialization, Generic[M]):
 
         """
 
-        resolved_unroll = 1 if unroll is None else int(unroll)
+        resolved_unroll = _normalize_unroll(unroll, self.Block.size)
 
         def do_block(carry, block, *args, **kwargs):
             carry = block(carry, *args, **kwargs)
@@ -577,22 +569,22 @@ class Stacked(ModuleWithStateDictSerialization, Generic[M]):
 
     @overload
     def fold_via(
-        self, fn: FoldFunction[M, P, CarryT], *, unroll: int | None = None
+        self, fn: FoldFunction[M, P, CarryT], *, unroll: int | bool | None = None
     ) -> Callable[Concatenate[CarryT, P], CarryT]: ...
 
     @overload
     def fold_via(
-        self, fn: Callable[[M, CarryT], CarryT], *, unroll: int | None = None
+        self, fn: Callable[[M, CarryT], CarryT], *, unroll: int | bool | None = None
     ) -> Callable[[CarryT], CarryT]: ...
 
-    def fold_via(self, fn: Callable[..., CarryT], *, unroll: int | None = None):
+    def fold_via(self, fn: Callable[..., CarryT], *, unroll: int | bool | None = None):
         """Return a function that folds over the stack using ``fn``.
 
         ``fn`` should take a block and a carry and return a new carry.  The
         returned function mirrors :func:`haliax.fold` over the block axis.
         """
 
-        resolved_unroll = 1 if unroll is None else int(unroll)
+        resolved_unroll = _normalize_unroll(unroll, self.Block.size)
 
         def do_block(carry: CarryT, block: M, *args, **kwargs) -> CarryT:
             return fn(block, carry, *args, **kwargs)
@@ -609,7 +601,7 @@ class Stacked(ModuleWithStateDictSerialization, Generic[M]):
 
     @overload
     def scan_via(
-        self, fn: ScanFunction[M, CarryT, P, OutputT_co], *, unroll: int | None = None
+        self, fn: ScanFunction[M, CarryT, P, OutputT_co], *, unroll: int | bool | None = None
     ) -> Callable[Concatenate[CarryT, P], tuple[CarryT, OutputT_co]]: ...
 
     @overload
@@ -617,17 +609,17 @@ class Stacked(ModuleWithStateDictSerialization, Generic[M]):
         self,
         fn: Callable[[M, CarryT], tuple[CarryT, OutputT_co]],
         *,
-        unroll: int | None = None,
+        unroll: int | bool | None = None,
     ) -> Callable[[CarryT], tuple[CarryT, OutputT_co]]: ...
 
-    def scan_via(self, fn: Callable[..., tuple[CarryT, OutputT_co]], *, unroll: int | None = None):
+    def scan_via(self, fn: Callable[..., tuple[CarryT, OutputT_co]], *, unroll: int | bool | None = None):
         """Return a function that scans over the stack using ``fn``.
 
         ``fn`` should take a block and a carry and return ``(carry, output)``.
         Semantics match :func:`haliax.scan` over the block axis.
         """
 
-        resolved_unroll = 1 if unroll is None else int(unroll)
+        resolved_unroll = _normalize_unroll(unroll, self.Block.size)
 
         def do_block(carry: CarryT, block: M, *args, **kwargs) -> tuple[CarryT, OutputT_co]:
             carry, output = fn(block, carry, *args, **kwargs)
