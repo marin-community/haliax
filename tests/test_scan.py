@@ -513,7 +513,7 @@ def test_scan_via_with_bool_unroll(monkeypatch):
     carry_true_direct, outs_true_direct = m.scan(x, unroll=True)
     carry_false_direct, outs_false_direct = m.scan(x, unroll=False)
 
-    assert scan_calls == [Block.size, 1, Block.size, 1]
+    assert scan_calls == [True, False, True, False]
 
     assert hax.all(hax.isclose(carry_true, default_carry_via))
     assert hax.all(hax.isclose(outs_true, default_outs_via))
@@ -742,7 +742,7 @@ def test_fold_with_bool_unroll(monkeypatch):
     via_true = m.fold_via(Module.intermediate, unroll=True)(x)
     via_false = m.fold_via(Module.intermediate, unroll=False)(x)
 
-    assert fold_calls == [Block.size, 1, Block.size, 1]
+    assert fold_calls == [True, False, True, False]
 
     assert hax.all(hax.isclose(fold_true, default_fold))
     assert hax.all(hax.isclose(fold_false, default_fold))

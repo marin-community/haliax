@@ -62,14 +62,14 @@ class ModuleInit(Protocol[M_co]):
     def __call__(self, *args, **kwargs) -> M_co: ...
 
 
-def _normalize_unroll(unroll: int | bool | None, block_size: int) -> int:
-    """Convert user-provided ``unroll`` values into an integer understood by ``jax.lax.scan``."""
+def _normalize_unroll(unroll: int | bool | None, block_size: int) -> int | bool:
+    """Convert user-provided ``unroll`` values into something understood by ``jax.lax.scan``."""
 
     if unroll is None:
         return 1
 
     if isinstance(unroll, bool):
-        return block_size if unroll else 1
+        return unroll
 
     resolved = int(unroll)
     if resolved < 1:
