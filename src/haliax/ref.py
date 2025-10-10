@@ -65,6 +65,9 @@ def _normalize_slice_value(value: Any) -> Any:
 
 
 def _dslice_params(value: Any) -> tuple[Any, int, Any] | None:
+    """
+    For slice like objects, return (start, size, step).
+    """
     if isinstance(value, HaliaxDSlice):
         return value.start, value.size, 1
     if is_pallas_dslice(value):
@@ -72,6 +75,7 @@ def _dslice_params(value: Any) -> tuple[Any, int, Any] | None:
         size = value.size
         step = value.stride
         return start, size, step
+
     return None
 
 
