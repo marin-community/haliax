@@ -181,6 +181,8 @@ See also the section on [Indexing and Slicing](indexing.md).
 
 ## Mutable References
 
+See also the section on [Mutable References](mutable-refs.md).
+
 JAX provides [`jax.Ref`][], a mutable array reference that can be read or written in place while remaining compatible
 with transformations such as `jax.jit` or `jax.grad`. Haliax mirrors that API with [`haliax.NamedRef`][haliax.NamedRef],
 which carries axis metadata so you can keep using named indexing when plumbing state through your programs.
@@ -211,7 +213,7 @@ helpers under `haliax.ref`).
 ::: haliax.freeze
 ::: haliax.swap
 
-[`jax.Ref`]: https://jax.readthedocs.io/en/latest/notebooks/refs.html
+[`jax.Ref`]: https://docs.jax.dev/en/latest/array_refs.html
 
 #### Dynamic Slicing
 

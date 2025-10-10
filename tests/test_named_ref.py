@@ -56,6 +56,43 @@ def test_slice_ref_composition():
     assert updated[{"layer": 1, "head": 0}].array == pytest.approx(7.0)
 
 
+def test_slice_ref_with_dslice():
+    Layer = hax.Axis("layer", 10)
+    Head = hax.Axis("head", 4)
+    cache_ref = hax.new_ref(hax.zeros((Layer, Head)))
+
+    sub = cache_ref.slice({"layer": hax.ds(3, 3)})
+    assert sub.axes == (Layer.resize(3), Head)
+
+    sub[{"layer": 1, "head": slice(None)}] = hax.ones(Head)
+
+    value = cache_ref.value()
+    assert jnp.allclose(value[{"layer": 4}].array, jnp.ones((Head.size,), dtype=jnp.float32))
+    assert isinstance(sub._prefix[0], type(hax.ds(0, 1)))
+
+
+def test_slice_value_and_unsliced():
+    X = hax.Axis("x", 6)
+    Y = hax.Axis("y", 3)
+    base = hax.new_ref(hax.arange((X, Y)))
+
+    slice_ref = base.slice({"x": slice(2, 5)})
+    slice_value = slice_ref.value()
+    expected = base.value()[{"x": slice(2, 5)}]
+    assert jnp.allclose(slice_value.array, expected.array)
+    assert slice_value.axes == expected.axes
+
+    slice_ref[{"x": 0}] = hax.zeros(Y).astype(slice_ref.dtype)
+    assert jnp.allclose(base.value()[{"x": 2}].array, hax.zeros(Y).array)
+
+    unsliced = slice_ref.unsliced()
+    assert unsliced is not slice_ref
+    assert unsliced.axes == base.axes
+    assert jnp.allclose(unsliced.value().array, base.value().array)
+    assert unsliced._prefix == tuple(slice(None) for _ in base.axes)
+    assert unsliced._ref is base._ref
+
+
 def test_freeze_returns_named_array():
     X = hax.Axis("x", 3)
     ref = hax.new_ref(hax.arange(X))
