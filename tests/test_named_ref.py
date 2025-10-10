@@ -1,3 +1,7 @@
+# Copyright 2025 The Levanter Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 import jax
 import jax.numpy as jnp
 import pytest
@@ -154,7 +158,7 @@ def test_with_scan():
             ref_slice = ref.slice({"x": x})
             ref_slice[...] = (x * x).astype(ref_slice.dtype)
             return None, x * 2
-        
+
         return hax.scan(scan_fn, X)(None, xs)[1]
 
     out = foo(ref, jnp.arange(X.size))

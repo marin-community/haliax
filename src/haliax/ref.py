@@ -6,11 +6,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from typing import Any, Mapping, Sequence
+from types import EllipsisType
 
 import jax
 import jax.numpy as jnp
 
-from .axis import Axis, AxisSelector, axis_name, dslice as HaliaxDSlice
+from .axis import Axis, AxisSelector, axis_name, axis_spec_to_tuple, dslice as HaliaxDSlice
 from .core import (
     NamedArray,
     NamedArrayAxesSpec,
@@ -21,7 +22,6 @@ from .core import (
     named,
 )
 from .jax_utils import is_pallas_dslice
-from .util import ensure_tuple
 
 try:  # pragma: no cover - optional dependency depending on JAX version
     from jax.experimental.pallas import dslice as PallasDSlice  # type: ignore
@@ -159,7 +159,7 @@ def _combine_index(
             return data * step0 + start0
 
         if isinstance(new, (list, tuple)):
-            converted: list[int] = []
+            converted_from_iterable: list[int] = []
             for item in new:
                 if not isinstance(item, int):
                     raise TypeError("Only integer lists/tuples are supported for slice references")
@@ -167,8 +167,8 @@ def _combine_index(
                     raise IndexError(f"Index {item} out of bounds for axis {view_axis.name}")
                 if item < 0:
                     item += view_length
-                converted.append(start0 + item * step0)
-            return converted
+                converted_from_iterable.append(start0 + item * step0)
+            return converted_from_iterable
 
         raise TypeError(
             "Slice references only support integers, slices, dslice, NamedArray, jnp.ndarray, or lists/tuples thereof"
@@ -206,7 +206,7 @@ def _combine_index(
         return data * step0 + start0
 
     if isinstance(new, (list, tuple)):
-        converted: list[int] = []
+        converted_from_iterable: list[int] = []
         for item in new:
             if not isinstance(item, int):
                 raise TypeError("Only integer lists/tuples are supported for slice references")
@@ -214,8 +214,8 @@ def _combine_index(
                 raise IndexError(f"Index {item} out of bounds for axis {view_axis.name}")
             if item < 0:
                 item += view_length
-            converted.append(start0 + item * step0)
-        return converted
+            converted_from_iterable.append(start0 + item * step0)
+        return converted_from_iterable
 
     raise TypeError(
         "Slice references only support integers, slices, dslice, NamedArray, jnp.ndarray, or lists/tuples thereof"
@@ -316,7 +316,7 @@ class NamedRef:
             return self
         return NamedRef(self._ref, self._axes, full_prefix)
 
-    def _prepare(self, idx: SliceSpec | Ellipsis | None) -> tuple[tuple[Any, ...], tuple[str, ...], list[Any]]:
+    def _prepare(self, idx: SliceSpec | EllipsisType | None) -> tuple[tuple[Any, ...], tuple[AxisSelector, ...], list[Any]]:
         if idx is Ellipsis or idx is None:
             selectors: Mapping[AxisSelector, Any] = {}
         else:
@@ -325,6 +325,7 @@ class NamedRef:
         selector_dict = _indices_to_selector(self._axes, combined)
         array_info = _AxisMetadata(self._axes)
         new_axes, ordered = _compute_new_axes_and_slices_for_index(array_info, selector_dict)
+        axes_tuple = axis_spec_to_tuple(new_axes)
         index_tuple: list[Any] = []
         for axis, item in zip(self._axes, ordered):
             selector_value = selector_dict.get(axis)
@@ -332,30 +333,31 @@ class NamedRef:
                 index_tuple.append(_to_pallas_dslice_if_available(selector_value))
             else:
                 index_tuple.append(item.array if isinstance(item, NamedArray) else item)
-        return combined, ensure_tuple(new_axes), index_tuple
+        return combined, axes_tuple, index_tuple
 
-    def __getitem__(self, idx: SliceSpec | Ellipsis = Ellipsis) -> NamedArray:
+    def __getitem__(self, idx: SliceSpec | EllipsisType = Ellipsis) -> NamedArray:
         _, axes_spec, index_tuple = self._prepare(idx)
         result = self._ref[tuple(index_tuple)]
         return named(result, axes_spec)
 
-    def __setitem__(self, idx: SliceSpec | Ellipsis, value: NamedOrNumeric) -> None:
+    def __setitem__(self, idx: SliceSpec | EllipsisType, value: NamedOrNumeric) -> None:
         _, axes_spec, index_tuple = self._prepare(idx)
         if isinstance(value, NamedArray):
             desired = axes_spec
+            desired_names = tuple(axis_name(ax) for ax in desired)
             current_names = tuple(axis_name(ax) for ax in value.axes)
-            if set(current_names) != set(desired):
+            if set(current_names) != set(desired_names):
                 raise ValueError(
-                    f"Value axes {current_names} do not match target axes {desired}; broadcasting is not yet supported"
+                    f"Value axes {current_names} do not match target axes {desired_names}; broadcasting is not yet supported"
                 )
-            if current_names != desired:
+            if current_names != desired_names:
                 value = value.rearrange(desired)
             payload = value.array
         else:
             payload = jnp.asarray(value)
         self._ref[tuple(index_tuple)] = payload
 
-    def slice(self, selector: Mapping[AxisSelector, Any]) -> NamedRef:
+    def slice(self, selector: Mapping[AxisSelector, Any]) -> "NamedRef":
         normalized = {key: _normalize_slice_value(val) for key, val in selector.items()}
         combined = _combine_indices(self._axes, self._prefix, normalized)
         for idx in combined:
@@ -397,20 +399,21 @@ def freeze(ref: NamedRef) -> NamedArray:
     return named(view, axes_spec)
 
 
-def get(ref: NamedRef, idx: SliceSpec | Ellipsis = Ellipsis) -> NamedArray:
+def get(ref: NamedRef, idx: SliceSpec | EllipsisType = Ellipsis) -> NamedArray:
     return ref[idx]
 
 
-def swap(ref: NamedRef, idx: SliceSpec | Ellipsis, value: NamedOrNumeric) -> NamedArray:
+def swap(ref: NamedRef, idx: SliceSpec | EllipsisType, value: NamedOrNumeric) -> NamedArray:
     _, axes_spec, index_tuple = ref._prepare(idx)
     if isinstance(value, NamedArray):
         desired = axes_spec
+        desired_names = tuple(axis_name(ax) for ax in desired)
         current_names = tuple(axis_name(ax) for ax in value.axes)
-        if set(current_names) != set(desired):
+        if set(current_names) != set(desired_names):
             raise ValueError(
-                f"Value axes {current_names} do not match target axes {desired}; broadcasting is not yet supported"
+                f"Value axes {current_names} do not match target axes {desired_names}; broadcasting is not yet supported"
             )
-        if current_names != desired:
+        if current_names != desired_names:
             value = value.rearrange(desired)
         payload = value.array
     else:
