@@ -11,7 +11,7 @@ from types import EllipsisType
 import jax
 import jax.numpy as jnp
 
-from .axis import Axis, AxisSelector, axis_name, axis_spec_to_tuple, dslice as HaliaxDSlice, AxisSelection
+from .axis import Axis, AxisSelector, axis_name, axis_spec_to_tuple, dslice as HaliaxDSlice
 from .core import (
     NamedArray,
     NamedOrNumeric,
@@ -22,7 +22,7 @@ from .core import (
 )
 from .jax_utils import is_pallas_dslice
 
-from jax.experimental.pallas import dslice as PallasDSlice  # type: ignore
+from jax.experimental.pallas import dslice
 
 
 class _AxisMetadata:
@@ -68,19 +68,11 @@ def _dslice_params(value: Any) -> tuple[Any, int, Any] | None:
     if isinstance(value, HaliaxDSlice):
         return value.start, value.size, 1
     if is_pallas_dslice(value):
-        start = getattr(value, "start")
-        size = getattr(value, "size")
-        step = getattr(value, "step", 1)
+        start = value.start
+        size = value.size
+        step = value.stride
         return start, size, step
     return None
-
-
-def _make_dslice(start: Any, size: int, step: Any = 1, *, prefer_pallas: bool = False):
-    if step != 1:
-        return PallasDSlice(start, size, step)
-    if prefer_pallas and PallasDSlice is not None:
-        return PallasDSlice(start, size)
-    return HaliaxDSlice(start, size)
 
 
 def _axes_after_prefix(axes: Sequence[Axis], indices: Sequence[Any]) -> tuple[Axis, ...]:
@@ -128,13 +120,15 @@ def _combine_index(
         if isinstance(new, slice):
             start1, stop1, step1 = new.indices(view_length)
             new_size = _slice_length(start1, stop1, step1)
-            return _make_dslice(start0 + start1 * step0, new_size, step0 * step1)
+            return dslice(start0 + start1 * step0, new_size, step0 * step1)
 
         if isinstance(new, (HaliaxDSlice,)) or is_pallas_dslice(new):
             n_params = _dslice_params(new)
             assert n_params is not None
             start1, size1, step1 = n_params
-            return _make_dslice(start0 + start1 * step0, size1, step0 * step1)
+            start = start0 + start1 * step0
+            step = step0 * step1
+            return dslice(start, size1, step)
 
         if isinstance(new, int):
             if new < -view_length or new >= view_length:
@@ -181,7 +175,9 @@ def _combine_index(
         n_params = _dslice_params(new)
         assert n_params is not None
         start1, size1, step1 = n_params
-        return _make_dslice(start0 + start1 * step0, size1, step0 * step1)
+        start2 = start0 + start1 * step0
+        step2 = step0 * step1
+        return dslice(start2, size1, step2)
 
     if isinstance(new, int):
         if new < -view_length or new >= view_length:
@@ -253,22 +249,29 @@ def _indices_to_selector(axes: Sequence[Axis], indices: Sequence[Any]) -> dict[A
     return selector
 
 
-def _to_pallas_dslice_if_available(value: Any) -> Any:
+def _to_pallas_dslice(value):
     if is_pallas_dslice(value):
         return value
     if isinstance(value, HaliaxDSlice):
-        return PallasDSlice(value.start, value.size)
-    return value
+        return dslice(value.start, value.size)
+    raise TypeError("Expected a haliax.dslice or pallas.dslice")
 
 
-def _normalize_axes_spec(spec: AxisSelection):
-    if isinstance(spec, tuple):
-        return spec
-    if isinstance(spec, list):
-        return tuple(spec)
-    if isinstance(spec, set):
-        return tuple(spec)
-    return spec
+def _is_supported_prefix(idx: Any) -> bool:
+    if isinstance(idx, (slice, int, HaliaxDSlice)) or is_pallas_dslice(idx):
+        return True
+    if isinstance(idx, list) and all(isinstance(it, int) for it in idx):
+        return True
+    if isinstance(idx, (jnp.ndarray, jax.Array)):
+        return idx.ndim <= 1 and jnp.issubdtype(idx.dtype, jnp.integer)
+    if isinstance(idx, NamedArray):
+        return idx.ndim <= 1 and jnp.issubdtype(idx.array.dtype, jnp.integer)
+    if jnp.isscalar(idx):
+        dtype = getattr(idx, "dtype", None)
+        if dtype is None:
+            dtype = jnp.asarray(idx).dtype
+        return jnp.issubdtype(dtype, jnp.integer)
+    return False
 
 
 @dataclass(frozen=True)
@@ -333,12 +336,14 @@ class NamedRef:
         selector_dict = _indices_to_selector(self._axes, combined)
         array_info = _AxisMetadata(self._axes)
         new_axes, ordered = _compute_new_axes_and_slices_for_index(array_info, selector_dict)
-        normalized_spec = _normalize_axes_spec(new_axes)
+        normalized_spec = axis_spec_to_tuple(new_axes)
         index_tuple: list[Any] = []
         for axis, item in zip(self._axes, ordered):
             selector_value = selector_dict.get(axis)
-            if selector_value is not None and isinstance(selector_value, HaliaxDSlice) or is_pallas_dslice(selector_value):
-                index_tuple.append(_to_pallas_dslice_if_available(selector_value))
+            if selector_value is not None and (
+                isinstance(selector_value, HaliaxDSlice) or is_pallas_dslice(selector_value)
+            ):
+                index_tuple.append(_to_pallas_dslice(selector_value))
             else:
                 index_tuple.append(item.array if isinstance(item, NamedArray) else item)
         return combined, normalized_spec, index_tuple
@@ -373,12 +378,7 @@ class NamedRef:
         normalized = {key: _normalize_slice_value(val) for key, val in selector.items()}
         combined = _combine_indices(self._axes, self._prefix, normalized)
         for idx in combined:
-            if not (
-                isinstance(idx, (slice, int, HaliaxDSlice))
-                or is_pallas_dslice(idx)
-                or jnp.isscalar(idx)
-                or (hasattr(idx, "shape") and getattr(idx, "ndim", 0) == 0)
-            ):
+            if not _is_supported_prefix(idx):
                 raise TypeError("Slice references only support simple integer/slice prefixes")
         return replace(self, _prefix=combined)
 
@@ -392,7 +392,7 @@ def new_ref(value: NamedArray) -> NamedRef:
         base_axes = value.axes
         impl = jax.new_ref(value.array)
     else:
-        raise TypeError("new_ref currently only supports NamedArray inputs")
+        raise TypeError("new_ref only supports NamedArray inputs")
 
     prefix = tuple(slice(None) for _ in base_axes)
     return NamedRef(impl, base_axes, prefix)
@@ -400,14 +400,7 @@ def new_ref(value: NamedArray) -> NamedRef:
 
 def freeze(ref: NamedRef) -> NamedArray:
     """Freeze the reference and return its current contents."""
-    _, axes_spec, index_tuple = ref._prepare(Ellipsis)
-    ref_module = getattr(jax, "ref", None)
-    if ref_module is None or not hasattr(ref_module, "freeze"):
-        return ref.value()
-
-    frozen = ref_module.freeze(ref._ref)
-    view = frozen[tuple(index_tuple)] if len(index_tuple) > 0 else frozen
-    return named(view, axes_spec)
+    return ref.value()
 
 
 def get(ref: NamedRef, idx: SliceSpec | EllipsisType = Ellipsis) -> NamedArray:

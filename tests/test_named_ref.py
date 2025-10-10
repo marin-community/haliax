@@ -5,6 +5,7 @@
 import jax
 import jax.numpy as jnp
 import pytest
+from jax.experimental.pallas import dslice
 
 import haliax as hax
 
@@ -72,7 +73,59 @@ def test_slice_ref_with_dslice():
 
     value = cache_ref.value()
     assert jnp.allclose(value[{"layer": 4}].array, jnp.ones((Head.size,), dtype=jnp.float32))
-    assert isinstance(sub._prefix[0], type(hax.ds(0, 1)))
+    assert isinstance(sub._prefix[0], type(dslice(0, 1)))
+
+
+def test_dslice_combination_branches():
+    X = hax.Axis("x", 10)
+    base = hax.new_ref(hax.arange(X))
+
+    ds_ref = base.slice({"x": hax.ds(2, 5)})
+
+    ds_plus_slice = ds_ref.slice({"x": slice(1, 3)})
+    prefix = ds_plus_slice._prefix[0]
+    assert isinstance(prefix, type(dslice(0, 1)))
+    assert prefix.start == 3 and prefix.size == 2
+
+    ds_plus_ds = ds_ref.slice({"x": hax.ds(1, 2)})
+    prefix = ds_plus_ds._prefix[0]
+    assert prefix.start == 3 and prefix.size == 2
+
+    single = ds_ref.slice({"x": 1})
+    assert single._prefix[0] == 3
+
+    neg = ds_ref.slice({"x": -1})
+    assert neg._prefix[0] == 6
+
+    list_ref = ds_ref.slice({"x": [0, 2]})
+    assert list_ref._prefix[0] == [2, 4]
+
+    array_ref = ds_ref.slice({"x": jnp.array([0, 1], dtype=jnp.int32)})
+    assert jnp.array_equal(array_ref._prefix[0], jnp.array([2, 3]))
+
+    Sel = hax.Axis("sel", 2)
+    named_idx = hax.arange(Sel).astype(jnp.int32)
+    named_ref = ds_ref.slice({"x": named_idx})
+    assert isinstance(named_ref._prefix[0], hax.NamedArray)
+    assert jnp.array_equal(named_ref._prefix[0].array, jnp.array([2, 3]))
+
+    strided = base.slice({"x": slice(1, 9, 2)})
+    strided_sub = strided.slice({"x": slice(1, 3)})
+    strided_prefix = strided_sub._prefix[0]
+    assert isinstance(strided_prefix, slice)
+    assert (strided_prefix.start, strided_prefix.stop, strided_prefix.step) == (3, 7, 2)
+
+    strided_list = strided.slice({"x": [0, 1]})
+    assert strided_list._prefix[0] == [1, 3]
+
+    strided_array = strided.slice({"x": jnp.array([0, 1], dtype=jnp.int32)})
+    assert jnp.array_equal(strided_array._prefix[0], jnp.array([1, 3]))
+
+    Sel2 = hax.Axis("sel2", 2)
+    named_idx2 = hax.arange(Sel2).astype(jnp.int32)
+    strided_named = strided.slice({"x": named_idx2})
+    assert isinstance(strided_named._prefix[0], hax.NamedArray)
+    assert jnp.array_equal(strided_named._prefix[0].array, jnp.array([1, 3]))
 
 
 def test_slice_value_and_unsliced():
