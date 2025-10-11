@@ -233,3 +233,20 @@ def test_with_scan():
     assert jnp.all(ref.value().array == jnp.arange(X.size) ** 2)
 
     assert jnp.all(out == jnp.arange(X.size) * 2)
+
+
+def test_grad_scan():
+    X = hax.Axis("x", 4)
+
+    def f(x):
+        x_ref = hax.new_ref(hax.zeros(X))
+        def scan_fn(_, i):
+            slice = x_ref.slice({"x": i})
+            slice[...] = jnp.sin(x * i)
+            return None, None
+
+        hax.scan(scan_fn, X)(None, jnp.arange(X.size))
+        return x_ref[...].sum().scalar()
+
+    df = jax.grad(f)(1.0)
+    assert pytest.approx(df) == jnp.sum(jnp.cos(jnp.arange(X.size)) * jnp.arange(X.size))
