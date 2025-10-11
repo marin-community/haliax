@@ -103,17 +103,31 @@ def test_dslice_combination_branches():
     array_ref = ds_ref.slice({"x": jnp.array([0, 1], dtype=jnp.int32)})
     assert jnp.array_equal(array_ref._prefix[0], jnp.array([2, 3]))
 
+    try:
+        array_reslice = array_ref.slice({"x": jnp.array([0], dtype=jnp.int32)})
+        assert array_reslice._prefix[0] == jnp.array([2], dtype=jnp.int32)
+    except NotImplementedError:
+        # Advanced indexing on advanced indexing is not supported yet.
+        pass
+
     Sel = hax.Axis("sel", 2)
     named_idx = hax.arange(Sel).astype(jnp.int32)
     named_ref = ds_ref.slice({"x": named_idx})
     assert isinstance(named_ref._prefix[0], hax.NamedArray)
     assert jnp.array_equal(named_ref._prefix[0].array, jnp.array([2, 3]))
 
+    try:
+        named_reslice = named_ref.slice({"x": hax.NamedArray(jnp.array([1], dtype=jnp.int32), (Sel.resize(1),))})
+        assert isinstance(named_reslice._prefix[0], hax.NamedArray)
+        assert jnp.array_equal(named_reslice._prefix[0].array, jnp.array([3]))
+    except NotImplementedError:
+        # Advanced indexing on advanced indexing is not supported yet.
+        pass
+
     strided = base.slice({"x": slice(1, 9, 2)})
     strided_sub = strided.slice({"x": slice(1, 3)})
     strided_prefix = strided_sub._prefix[0]
-    assert isinstance(strided_prefix, slice)
-    assert (strided_prefix.start, strided_prefix.stop, strided_prefix.step) == (3, 7, 2)
+    assert (strided_prefix.start, strided_prefix.size, strided_prefix.stride) == (3, 2, 2)
 
     strided_list = strided.slice({"x": [0, 1]})
     assert strided_list._prefix[0] == [1, 3]

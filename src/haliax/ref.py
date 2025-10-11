@@ -4,8 +4,9 @@
 
 from __future__ import annotations
 
+import functools
 from dataclasses import dataclass, replace
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping, Sequence, dataclass_transform
 from types import EllipsisType
 
 import jax
@@ -56,12 +57,30 @@ def _slice_length(start: int, stop: int, step: int) -> int:
     return (start - stop - step - 1) // step_abs
 
 
-def _normalize_slice_value(value: Any) -> Any:
-    if isinstance(value, range):
-        return slice(value.start, value.stop, value.step)
-    if isinstance(value, HaliaxDSlice) or is_pallas_dslice(value):
+def _is_slice_like(value: Any) -> bool:
+    return isinstance(value, (slice, range, HaliaxDSlice)) or is_pallas_dslice(value)
+
+
+def _normalize_slice_value(value: Any, axis: Axis) -> Any:
+    if not _is_slice_like(value):
         return value
-    return value
+
+    if isinstance(value, range):
+        # return slice(value.start, value.stop, value.step)
+        value = slice(value.start, value.stop, value.step)
+
+    if isinstance(value, slice):
+        start, stop, step = value.indices(axis.size)
+        length = _slice_length(start, stop, step)
+        return dslice(start, length, step)
+
+    if isinstance(value, HaliaxDSlice):
+        return _to_pallas_dslice(value)
+
+    if is_pallas_dslice(value):
+        return value
+
+    raise ValueError("Should not reach here")
 
 
 def _dslice_params(value: Any) -> tuple[Any, int, Any] | None:
@@ -97,7 +116,7 @@ def _axes_after_prefix(axes: Sequence[Axis], indices: Sequence[Any]) -> tuple[Ax
                 view_axes.append(Axis(axis.name, size))
                 continue
             else:
-                raise TypeError(
+                raise NotImplementedError(
                     "Slice references currently only support integer or slice prefixes; "
                     f"got {type(sel)} for axis {axis}"
                 )
@@ -114,74 +133,27 @@ def _combine_index(
     if isinstance(current, int):
         raise ValueError(f"Axis {base_axis.name} is already fixed by the slice reference")
 
-    new = _normalize_slice_value(new)
+    if _is_slice_like(current):
+        current = _normalize_slice_value(current, axis=base_axis)
+    else:
+        raise NotImplementedError("Slice references currently only support simple integer/slice prefixes")
 
     ds_params = _dslice_params(current)
-    if ds_params is not None:
-        start0, size0, step0 = ds_params
-        view_length = size0
+    assert ds_params is not None
 
-        if isinstance(new, slice):
-            start1, stop1, step1 = new.indices(view_length)
-            new_size = _slice_length(start1, stop1, step1)
-            return dslice(start0 + start1 * step0, new_size, step0 * step1)
+    start0, size0, step0 = ds_params
+    view_length = size0
 
-        if isinstance(new, (HaliaxDSlice,)) or is_pallas_dslice(new):
-            n_params = _dslice_params(new)
-            assert n_params is not None
-            start1, size1, step1 = n_params
-            start = start0 + start1 * step0
-            step = step0 * step1
-            return dslice(start, size1, step)
+    if _is_slice_like(new):
+        new = _normalize_slice_value(new, axis=view_axis)
 
-        if isinstance(new, int):
-            if new < -view_length or new >= view_length:
-                raise IndexError(f"Index {new} out of bounds for axis {view_axis.name}")
-            if new < 0:
-                new += view_length
-            return start0 + new * step0
-
-        if isinstance(new, NamedArray):
-            data = jnp.where(new.array < 0, new.array + view_length, new.array)
-            transformed = data * step0 + start0
-            return NamedArray(transformed, new.axes)
-
-        if isinstance(new, jnp.ndarray):
-            data = jnp.where(new < 0, new + view_length, new)
-            return data * step0 + start0
-
-        if isinstance(new, (list, tuple)):
-            converted_list: list[int] = []
-            for item in new:
-                if not isinstance(item, int):
-                    raise TypeError("Only integer lists/tuples are supported for slice references")
-                if item < -view_length or item >= view_length:
-                    raise IndexError(f"Index {item} out of bounds for axis {view_axis.name}")
-                if item < 0:
-                    item += view_length
-                converted_list.append(start0 + item * step0)
-            return converted_list
-
-        raise TypeError(
-            "Slice references only support integers, slices, dslice, NamedArray, jnp.ndarray, or lists/tuples thereof"
-            f"; got {type(new)}"
-        )
-
-    # Fallback to python slice semantics for basic slices
-    start0, stop0, step0 = current.indices(base_axis.size)
-    view_length = _slice_length(start0, stop0, step0)
-
-    if isinstance(new, slice):
-        start1, stop1, step1 = new.indices(view_length)
-        return slice(start0 + start1 * step0, start0 + stop1 * step0, step0 * step1)
-
-    if isinstance(new, (HaliaxDSlice,)) or is_pallas_dslice(new):
+    if _is_slice_like(new):
         n_params = _dslice_params(new)
         assert n_params is not None
         start1, size1, step1 = n_params
-        start2 = start0 + start1 * step0
-        step2 = step0 * step1
-        return dslice(start2, size1, step2)
+        start = start0 + start1 * step0
+        step = step0 * step1
+        return dslice(start, size1, step)
 
     if isinstance(new, int):
         if new < -view_length or new >= view_length:
@@ -200,7 +172,7 @@ def _combine_index(
         return data * step0 + start0
 
     if isinstance(new, (list, tuple)):
-        converted_list = []
+        converted_list: list[int] = []
         for item in new:
             if not isinstance(item, int):
                 raise TypeError("Only integer lists/tuples are supported for slice references")
@@ -271,13 +243,24 @@ def _is_supported_prefix(idx: Any) -> bool:
     if isinstance(idx, NamedArray):
         return idx.ndim <= 1 and jnp.issubdtype(idx.array.dtype, jnp.integer)
     if jnp.isscalar(idx):
-        dtype = getattr(idx, "dtype", None)
+        dtype = idx.dtype
         if dtype is None:
             dtype = jnp.asarray(idx).dtype
         return jnp.issubdtype(dtype, jnp.integer)
     return False
 
 
+    # >>> @partial(jax.tree_util.register_dataclass,
+    # ...          data_fields=['x', 'y'],
+    # ...          meta_fields=['op'])
+@functools.partial(
+    jax.tree_util.register_dataclass,
+    # TODO: prefix should be a data field, but it can't until we make all _prefix members Slice or other arrays
+    # data_fields=["_ref", "_prefix"],
+    # meta_fields=["_axes"],
+    data_fields=["_ref"],
+    meta_fields=["_axes", "_prefix"],
+)
 @dataclass(frozen=True)
 class NamedRef:
     """Named wrapper around :class:`jax.Ref` that preserves axis metadata."""
@@ -377,9 +360,17 @@ class NamedRef:
             payload = jnp.asarray(value)
         self._ref[tuple(index_tuple)] = payload
 
+    def resolve_axis(self, axis: AxisSelector) -> Axis:
+        """Resolve an axis selector to the corresponding axis in the current view."""
+        name = axis_name(axis)
+        for ax in self.axes:
+            if ax.name == name:
+                return ax
+        raise ValueError(f"Axis {name} is not present in this reference view")
+
     def slice(self, selector: Mapping[AxisSelector, Any]) -> "NamedRef":
         """Return a new view with the provided selector staged for future operations."""
-        normalized = {key: _normalize_slice_value(val) for key, val in selector.items()}
+        normalized = {key: _normalize_slice_value(val, self.resolve_axis(key)) for key, val in selector.items()}
         combined = _combine_indices(self._axes, self._prefix, normalized)
         for idx in combined:
             if not _is_supported_prefix(idx):
@@ -435,16 +426,3 @@ def swap(ref: NamedRef, idx: SliceSpec | EllipsisType, value: NamedOrNumeric) ->
 
 
 __all__ = ["NamedRef", "new_ref", "freeze", "get", "swap"]
-
-
-def _namedref_flatten(ref: NamedRef):
-    return (ref._ref,), (ref._axes, ref._prefix)
-
-
-def _namedref_unflatten(aux, children):
-    (axes, prefix) = aux
-    (ref_impl,) = children
-    return NamedRef(ref_impl, tuple(axes), tuple(prefix))
-
-
-jax.tree_util.register_pytree_node(NamedRef, _namedref_flatten, _namedref_unflatten)
