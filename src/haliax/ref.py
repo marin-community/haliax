@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import functools
 from dataclasses import dataclass, replace
-from typing import Any, Mapping, Sequence, dataclass_transform
+from typing import Any, Mapping, Sequence
 from types import EllipsisType
 
 import jax
@@ -249,10 +249,11 @@ def _is_supported_prefix(idx: Any) -> bool:
         return jnp.issubdtype(dtype, jnp.integer)
     return False
 
-
     # >>> @partial(jax.tree_util.register_dataclass,
     # ...          data_fields=['x', 'y'],
     # ...          meta_fields=['op'])
+
+
 @functools.partial(
     jax.tree_util.register_dataclass,
     # TODO: prefix should be a data field, but it can't until we make all _prefix members Slice or other arrays

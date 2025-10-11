@@ -240,6 +240,7 @@ def test_grad_scan():
 
     def f(x):
         x_ref = hax.new_ref(hax.zeros(X))
+
         def scan_fn(_, i):
             slice = x_ref.slice({"x": i})
             slice[...] = jnp.sin(x * i)
