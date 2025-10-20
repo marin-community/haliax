@@ -71,11 +71,6 @@ import haliax as hax
 import equinox as eqx
 import jax
 
-In = hax.Axis("In", 32)
-Mid = hax.Axis("Mid", 128)
-Out = hax.Axis("Out", 16)
-Hidden = hax.Axis("Hidden", 64)
-
 
 class MyModule(eqx.Module):
     up_proj: hax.nn.Linear
@@ -86,8 +81,8 @@ class MyModule(eqx.Module):
         super().__init__()
         k_up, k_down = jax.random.split(key)
         return MyModule(
-            up_proj=hax.nn.Linear.init(In, Mid, key=k_up),
-            down_proj=hax.nn.Linear.init(Mid, Out, key=k_down),
+            up_proj=hax.nn.Linear.init({"In": 32}, {"Mid": 128}, key=k_up),
+            down_proj=hax.nn.Linear.init({"Mid": 128}, {"Out": 16}, key=k_down),
         )
 
     def __call__(self, x):

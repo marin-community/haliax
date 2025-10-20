@@ -13,33 +13,24 @@ import jax.numpy as jnp
 
 import haliax as hax
 
+# use dictionaries for shapes
+x = hax.zeros({"batch": 32, "embed": 64})
+y = hax.zeros({"batch": 32, "embed": 64})
+z = hax.zeros({"batch": 32})
+w = hax.zeros({"embed": 64})
+ind = hax.arange({"index": 8}, dtype=jnp.int32)
+im = hax.zeros({"batch": 32, "h": 16, "w": 16, "c": 3})
+w2 = hax.zeros({"c": 3, "embed": 64})
+
+# axis objects are still available if needed
 Batch = hax.Axis("batch", 32)
 Embed = hax.Axis("embed", 64)
 H = hax.Axis("h", 16)
 W = hax.Axis("w", 16)
 C = hax.Axis("c", 3)
 
-
 Step = hax.Axis("step", 2)
 Mini = hax.Axis("mini", 16)
-
-# for jax
-x = jnp.zeros((32, 64))
-y = jnp.zeros((32, 64))
-z = jnp.zeros((32,))
-w = jnp.zeros((64,))
-ind = jnp.arange((8,), dtype=jnp.int32)
-im = jnp.zeros((32, 16, 16, 3))
-w2 = jnp.zeros((3, 64))
-
-# for haliax
-x = hax.zeros((Batch, Embed))
-y = hax.zeros((Batch, Embed))
-z = hax.zeros((Batch,))
-w = hax.zeros((Embed,))
-ind = hax.arange(hax.Axis("Index", 8), dtype=jnp.int32)
-im = hax.zeros((Batch, H, W, C))
-w2 = hax.zeros((C, Embed))
 ```
 
 
@@ -79,7 +70,7 @@ w2 = hax.zeros((C, Embed))
 | JAX                                           | Haliax                                                                              |
 |-----------------------------------------------|-------------------------------------------------------------------------------------|
 | [`x.transpose((1, 0))`][jax.numpy.transpose]  | [`x.rearrange("embed", "batch")`][haliax.rearrange]                                 |
-| [`x.reshape((2, 16, 64))`][jax.numpy.reshape] | [`x.unflatten_axis("batch", (Axis("a", 2), Axis("b", 16)))`][haliax.unflatten_axis] |
+| [`x.reshape((2, 16, 64))`][jax.numpy.reshape] | [`x.unflatten_axis("batch", {"a": 2, "b": 16})`][haliax.unflatten_axis] |
 | [`x.reshape((-1,))`][jax.numpy.reshape]      | [`x.flatten_axes(("batch", "embed"), "foo")`][haliax.flatten_axes]                  |
 | [`jnp.ravel(x)`][jax.numpy.ravel]                | [`hax.ravel(x, "Embed")`][haliax.flatten]                               |
 | [`jnp.ravel(x)`][jax.numpy.ravel]                | [`hax.flatten(x, "Embed")`][haliax.flatten]                             |

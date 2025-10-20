@@ -34,13 +34,10 @@ I have found this to be a source of bugs: it is easy to accidentally have an arr
 In Haliax, broadcasting is done by matching names. The same operation in Haliax might look like this:
 
 ```python
-M = hax.Axis("M", 5)
-N = hax.Axis("N", 4)
+a = hax.arange({"M": 5})
+b = hax.arange({"N": 4})
 
-a = hax.arange(M)
-b = hax.arange(N)
-
-c = a.broadcast_axis(N) * b
+c = a.broadcast_axis("N") * b
 print(c.axes)
 print(c.array)
 ```

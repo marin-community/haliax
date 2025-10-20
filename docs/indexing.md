@@ -15,11 +15,7 @@ an alternating sequence of axis names and indices. The latter is useful for inde
 import haliax as hax
 import jax
 
-X = hax.Axis("X", 10)
-Y = hax.Axis("Y", 20)
-Z = hax.Axis("Z", 30)
-
-a = hax.random.uniform(jax.random.PRNGKey(0), (X, Y, Z))
+a = hax.random.uniform(jax.random.PRNGKey(0), {"X": 10, "Y": 20, "Z": 30})
 
 a[{"X": 1, "Y": 2, "Z": 3}]  # returns a scalar jnp.ndarray
 a[{"X": 1, "Y": 2, "Z": slice(3, 5)}]  # return a NamedArray with axes = Axis("Z", 2)
@@ -54,10 +50,7 @@ import haliax as hax
 import jax
 import jax.numpy as jnp
 
-X = hax.Axis("X", 10)
-Y = hax.Axis("Y", 20)
-
-a = hax.random.uniform(jax.random.PRNGKey(0), (X, Y))
+a = hax.random.uniform(jax.random.PRNGKey(0), {"X": 10, "Y": 20})
 
 sliced = a["X", jnp.array([1, 2, 3])]
 
@@ -110,12 +103,11 @@ import jax
 
 import haliax as hax
 
-N = hax.Axis("N", 10)
-q = hax.arange(N)
+q = hax.arange({"N": 10})
 
 @hax.named_jit
 def f(x, slice_size: int):
-    num_blocks = N.size // slice_size
+    num_blocks = 10 // slice_size
     def body(i, m):
         return i + hax.mean(hax.slice(x, {"N": i * slice_size}, {"N": slice_size}))
     jax.lax.fori_loop(0, num_blocks, body, 0.0)
@@ -134,12 +126,11 @@ statically known, but the start can be dynamic. This allows us to write the abov
 import jax
 import haliax as hax
 
-N = hax.Axis("N", 10)
-q = hax.arange(N)
+q = hax.arange({"N": 10})
 
 @hax.named_jit
 def f(x, slice_size: int):
-    num_blocks = N.size // slice_size
+    num_blocks = 10 // slice_size
     def body(i, m):
         return i + hax.mean(x["N", hax.dslice(i * slice_size, slice_size)])
     jax.lax.fori_loop(0, num_blocks, body, 0.0)
@@ -160,12 +151,11 @@ example can be written as follows:
 import jax
 import haliax as hax
 
-N = hax.Axis("N", 10)
-q = hax.arange(N)
+q = hax.arange({"N": 10})
 
 @hax.named_jit
 def f(x, slice_size: int):
-    num_blocks = N.size // slice_size
+    num_blocks = 10 // slice_size
     def body(i, m):
         return i + hax.mean(x["N", hax.ds.block(i, slice_size)])
     jax.lax.fori_loop(0, num_blocks, body, 0.0)
@@ -189,17 +179,10 @@ In particular, axes with the same name must have the same size.
 import haliax as hax
 import jax
 
-X = hax.Axis("X", 10)
-Y = hax.Axis("Y", 20)
-Z = hax.Axis("Z", 30)
+a = hax.random.uniform(jax.random.PRNGKey(0), {"X": 10, "Y": 20, "Z": 30})
 
-a = hax.random.uniform(jax.random.PRNGKey(0), (X, Y, Z))
-
-I1 = hax.Axis("I1", 5)
-I2 = hax.Axis("I2", 5)
-I3 = hax.Axis("I3", 5)
-ind1 = hax.random.randint(jax.random.PRNGKey(0), (I1,), 0, 10)
-ind2 = hax.random.randint(jax.random.PRNGKey(0), (I2, I3), 0, 20)
+ind1 = hax.random.randint(jax.random.PRNGKey(0), {"I1": 5}, 0, 10)
+ind2 = hax.random.randint(jax.random.PRNGKey(0), {"I2": 5, "I3": 5}, 0, 20)
 
 a[{"X": ind1}]  # returns a NamedArray with axes = Axis("I1", 5), Axis("Y", 20), Axis("Z", 30)
 
@@ -218,16 +201,9 @@ if it would be eliminated by the indexing operation. For example:
 import haliax as hax
 import jax
 
-X = hax.Axis("X", 10)
-Y = hax.Axis("Y", 20)
-Z = hax.Axis("Z", 30)
-
-X2 = hax.Axis("X", 5)
-Y2 = hax.Axis("Y", 5)
-
-a = hax.random.uniform(jax.random.PRNGKey(0), (X, Y, Z))
-ind1 = hax.random.randint(jax.random.PRNGKey(0), (X2,), 0, 10)
-ind2 = hax.random.randint(jax.random.PRNGKey(0), (Y2,), 0, 10)
+a = hax.random.uniform(jax.random.PRNGKey(0), {"X": 10, "Y": 20, "Z": 30})
+ind1 = hax.random.randint(jax.random.PRNGKey(0), {"X": 5}, 0, 10)
+ind2 = hax.random.randint(jax.random.PRNGKey(0), {"Y": 5}, 0, 10)
 
 a[{"X": ind1, "Y": ind2}]  # returns a NamedArray with axes = Axis("X", 5), Axis("Y", 5), Axis("Z", 30)
 
@@ -246,11 +222,7 @@ provides a similar syntax for updating arrays.
 ```python
 import haliax as hax
 
-X = hax.Axis("X", 10)
-Y = hax.Axis("Y", 20)
-Z = hax.Axis("Z", 30)
-
-a = hax.zeros((X, Y, Z))
+a = hax.zeros({"X": 10, "Y": 20, "Z": 30})
 
 a.at[{"X": 1, "Y": 2, "Z": 3}].set(1.0)  # sets a[1, 2, 3] to 1.0
 a.at["X", 1].set(2.0)  # sets a[1, :, :] to 2.0
@@ -304,9 +276,8 @@ inserted into the result.
 import haliax as hax
 import jax.numpy as jnp
 
-B, S, V = Axis("batch", 4), Axis("seq", 3), Axis("vocab", 7)
-x = hax.arange((B, S, V))
-idx = hax.arange((B, S), dtype=jnp.int32) % V.size
+x = hax.arange({"batch": 4, "seq": 3, "vocab": 7})
+idx = hax.arange({"batch": 4, "seq": 3}, dtype=jnp.int32) % 7
 
 out = x["vocab", idx]
 ```
@@ -318,13 +289,9 @@ For scatter-style updates where each batch writes to a different position, use
 [`updated_slice`][haliax.updated_slice]:
 
 ```python
-Batch = hax.Axis("batch", 2)
-Seq = hax.Axis("seq", 5)
-New = hax.Axis("seq", 2)
-
-cache = hax.zeros((Batch, Seq), dtype=int)
-lengths = hax.named([1, 3], axis=Batch)
-kv = hax.named([[1, 2], [3, 4]], axis=(Batch, New))
+cache = hax.zeros({"batch": 2, "seq": 5}, dtype=int)
+lengths = hax.named([1, 3], axis="batch")
+kv = hax.named([[1, 2], [3, 4]], axis=("batch", "seq"))
 
 result = updated_slice(cache, {"seq": lengths}, kv)
 ```
