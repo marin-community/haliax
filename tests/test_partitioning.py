@@ -7,10 +7,11 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pytest
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 from jaxtyping import Array
-
 import haliax as hax
+import haliax.nn as hnn
 from haliax import Axis, NamedArray
 from haliax.partitioning import (
     ResourceAxis,
@@ -356,3 +357,32 @@ def test_named_jit_no_in_axis_resources():
 
         r = fn(data)
         assert r.array.sharding.device_set == set(jax.devices())
+
+
+@skip_if_not_enough_devices(4)
+def test_shard_with_axis_mapping_duplicate_spec_raises():
+    class MLP(eqx.Module):
+        w1: hnn.Linear
+        w2: hnn.Linear
+
+        @staticmethod
+        def init(Hidden, GateUp, *, key):
+            k1, k2 = jax.random.split(key, 2)
+            w1 = hnn.Linear.init(In=Hidden, Out=GateUp, key=k1)
+            w2 = hnn.Linear.init(In=GateUp, Out=Hidden, key=k2)
+            return MLP(w1, w2)
+
+        def __call__(self, x):
+            return self.w2(hnn.activations.gelu(self.w1(x)))
+
+    Hidden = Axis("hidden", 32)
+    GateUp = Axis("gate_up", 128)
+
+    key = jax.random.PRNGKey(0)
+    mlp = MLP.init(Hidden, GateUp, key=key)
+
+    mesh = Mesh(np.array(jax.devices()[:4]).reshape(1, 4), ("data", "model"))
+    compute_axis_mapping = {"hidden": "model", "gate_up": "model"}
+
+    with pytest.raises(DuplicateSpecError):
+        hax.shard_with_axis_mapping(mlp, compute_axis_mapping, mesh)
