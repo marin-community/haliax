@@ -35,11 +35,8 @@ Unlike JAX's scan, Haliax's scan is curried - it takes the function and configur
 Here's a practical example of using [haliax.scan][] to sum values along an axis while keeping track of intermediates:
 
 ```python
-Time = Axis("Time", 100)
-Features = Axis("Features", 16)
-
 # Create time series data
-data = hax.random.normal(PRNGKey(0), (Time, Features))
+data = hax.random.normal(PRNGKey(0), {"Time": 100, "Features": 16})
 
 def running_stats(state, x):
     count, mean, min_val, max_val = state
@@ -56,12 +53,12 @@ def running_stats(state, x):
 # Initialize state: (count, mean, min, max)
 init_state = (
     0.0,
-    hax.zeros((Features,)),
-    hax.full((Features,), float('inf')),
-    hax.full((Features,), float('-inf'))
+    hax.zeros({"Features": 16}),
+    hax.full({"Features": 16}, float('inf')),
+    hax.full({"Features": 16}, float('-inf'))
 )
 
-final_state, running_means = hax.scan(running_stats, Time)(init_state, data)
+final_state, running_means = hax.scan(running_stats, "Time")(init_state, data)
 ```
 
 Note that:
@@ -76,15 +73,12 @@ Note that:
 You can also use scan without any inputs if you want:
 
 ```python
-Time = Axis("Time", 100)
-Features = Axis("Features", 16)
-
 def simulate_brownian_motion(state, _):
-    return state + hax.random.normal(PRNGKey(0), Features), state
+    return state + hax.random.normal(PRNGKey(0), {"Features": 16}), state
 
-init_state = hax.zeros((Features,))
+init_state = hax.zeros({"Features": 16})
 
-final_state, path = hax.scan(simulate_brownian_motion, Time)(init_state, None)
+final_state, path = hax.scan(simulate_brownian_motion, "Time")(init_state, None)
 ```
 
 More commonly, you might use this for an RNN or Transformer model. (See [haliax.nn.Stacked][].)
@@ -109,11 +103,8 @@ def fold(f, init, xs):
 Same example, but we only care about the final state:
 
 ```python
-Time = Axis("Time", 100)
-Features = Axis("Features", 16)
-
 # Create time series data
-data = hax.random.normal(PRNGKey(0), (Time, Features))
+data = hax.random.normal(PRNGKey(0), {"Time": 100, "Features": 16})
 
 def running_stats(state, x):
     count, mean, min_val, max_val = state
@@ -130,12 +121,12 @@ def running_stats(state, x):
 # Initialize state: (count, mean, min, max)
 init_state = (
     0.0,
-    hax.zeros((Features,)),
-    hax.full((Features,), float('inf')),
-    hax.full((Features,), float('-inf'))
+    hax.zeros({"Features": 16}),
+    hax.full({"Features": 16}, float('inf')),
+    hax.full({"Features": 16}, float('-inf'))
 )
 
-final_state = hax.fold(running_stats, Time)(init_state, data)
+final_state = hax.fold(running_stats, "Time")(init_state, data)
 ```
 
 ## [haliax.map][haliax.map]
@@ -144,15 +135,12 @@ final_state = hax.fold(running_stats, Time)(init_state, data)
 to [jax.lax.map][] but works with NamedArrays, providing a similar interface to [haliax.scan][] and [haliax.fold][].
 
 ```python
-
-Time = Axis("Time", 100)
-
-data = hax.random.normal(PRNGKey(0), (Time,))
+data = hax.random.normal(PRNGKey(0), {"Time": 100})
 
 def my_fn(x):
     return x + 1
 
-result = hax.map(my_fn, Time)(data)
+result = hax.map(my_fn, "Time")(data)
 ```
 
 You should generally prefer to use [haliax.vmap][] instead of [haliax.map][], but it's there if you need it.
@@ -185,7 +173,7 @@ in JAX and doesn't seem to reliably work yet.
 In the simplest case, you can enable a usually-good-enough checkpointing policy by passing `remat=True`:
 
 ```python
-final_state = hax.fold(running_stats, Time, remat=True)(init_state, data)
+final_state = hax.fold(running_stats, "Time", remat=True)(init_state, data)
 ```
 
 ("remat" is short for "rematerialization", which is another term for gradient checkpointing.)
@@ -201,7 +189,7 @@ Simple checkpointing requires `O(N)` memory where $N$ is the number of blocks. A
 this to `O(sqrt(N))` memory, at the cost of a bit more computation. You can enable this by passing `remat="nested"`:
 
 ```python
-final_state = hax.fold(running_stats, Time, remat="nested")(init_state, data)
+final_state = hax.fold(running_stats, "Time", remat="nested")(init_state, data)
 ```
 
 This will break the scan into a double loop, where the outer loop has `sqrt(N)` blocks and the inner loop has
@@ -336,10 +324,11 @@ scan-over-layers pattern.
 ### Stacked
 
 [haliax.nn.Stacked][] lets you apply a layer sequentially to an input, scanning over a "Layers" axis. For instance,
-a Transformer might use a Stacked for its Transformer blocks:
+a Transformer might use a Stacked for its Transformer blocks. Because the number of layers isn't implied by the data, we define a `Layers` axis explicitly:
 
 
 ```python
+Layers = hax.Axis("Layers", 12)
 class TransformerBlock(eqx.Module):
 
     def __init__(self, config: TransformerConfig, layer_index, *, key):

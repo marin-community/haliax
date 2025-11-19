@@ -23,17 +23,12 @@ will be rearranged to match that sequence. For example:
 import haliax as hax
 import jax.random as jrandom
 
-N = hax.Axis("N", 32)
-C = hax.Axis("C", 3)
-H = hax.Axis("H", 64)
-W = hax.Axis("W", 64)
+x = hax.random.normal(jrandom.PRNGKey(0), {"N": 32, "C": 3, "H": 64, "W": 64})
 
-x = hax.random.normal(jrandom.PRNGKey(0), (N, C, H, W))
-
-y = hax.rearrange(x, (N, H, W, C))
+y = hax.rearrange(x, ("N", "H", "W", "C"))
 
 # at most one ellipsis is allowed
-z = hax.rearrange(x, (N, ..., C))
+z = hax.rearrange(x, ("N", ..., "C"))
 
 # you can use strings instead of axis objects
 z = hax.rearrange(x, ("N", ..., "C"))
@@ -65,12 +60,7 @@ Examples are probably the best way to get a feel for the syntax:
 import haliax as hax
 import jax.random as jrandom
 
-N = hax.Axis("N", 32)
-C = hax.Axis("C", 3)
-H = hax.Axis("H", 64)
-W = hax.Axis("W", 64)
-
-x = hax.random.normal(jrandom.PRNGKey(0), (N, C, H, W))
+x = hax.random.normal(jrandom.PRNGKey(0), {"N": 32, "C": 3, "H": 64, "W": 64})
 
 # transpose/permute axes
 y = hax.rearrange(x, "N C H W -> N H W C")
@@ -119,7 +109,7 @@ as in einops. However, we can also use bindings to alias axes. For example:
 
 ```python
 # this produces the same result as the previous example
-y2 = hax.rearrange(x, "N C (patch_h foo) (patch_w bar) -> N (P: patch_h patch_w) (C: C foo bar)", foo=hax.Axis("H", 4), bar=hax.Axis("W", 4))
+y2 = hax.rearrange(x, "N C (patch_h foo) (patch_w bar) -> N (P: patch_h patch_w) (C: C foo bar)", foo="H", bar="W")
 assert y.axes == y2.axes
 ```
 
@@ -130,7 +120,8 @@ You can actually pass in a string alias instead of an axis object, and it will b
 For instance, if we wanted "P" to actually be called "patch", but wanted to keep the short syntax, we could do:
 
 ```python
-y3 = hax.rearrange(x, "N C (nh ph) (nw pw) -> N (P: nh nw) (C: C ph pw)", P="patch", pw=4, ph=4)
+patch_axis = hax.Axis("patch", 256)
+y3 = hax.rearrange(x, "N C (nh ph) (nw pw) -> N (P: nh nw) (C: C ph pw)", P=patch_axis, pw=4, ph=4)
 ```
 
 
