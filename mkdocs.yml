@@ -84,6 +84,7 @@ nav:
       - "Distributed Training and FSDP": https://colab.research.google.com/drive/1QX4yH3zRFF3Xiibf1aahETcSQ5nbcUMz
       - "Tensor Parallelism": https://colab.research.google.com/drive/18_BrtDpe1lu89M4T6fKzda8DdSLtFJhi
       - "Mixed Precision with `jmp`": https://colab.research.google.com/drive/1_4cikwt-UhSH7yRzNRK8ze9msM9r2mEl?usp=sharing
+  - Examples: 'examples.md'
   - Cheatsheet: 'cheatsheet.md'
   - Named Arrays:
     - Broadcasting: 'broadcasting.md'
