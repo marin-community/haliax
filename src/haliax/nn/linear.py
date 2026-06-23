@@ -12,7 +12,10 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 from jax.experimental.pallas.ops.tpu.megablox import gmm
-from jax.experimental.shard_map import shard_map
+try:
+    from jax import shard_map  # jax >= 0.8
+except ImportError:
+    from jax.experimental.shard_map import shard_map  # jax 0.6.x-0.7.x
 from jax.random import PRNGKey
 from jaxtyping import PRNGKeyArray
 
